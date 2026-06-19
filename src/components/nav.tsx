@@ -3,6 +3,13 @@ import { Coffee, LayoutDashboard, Bell, LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 
+async function signOut() {
+  'use server';
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  redirect('/login');
+}
+
 export async function AppNav() {
   return (
     <nav className="border-b border-zinc-200 bg-white">
@@ -39,11 +46,4 @@ function NavLink({ href, icon, children }: { href: string; icon: React.ReactNode
       {children}
     </Link>
   );
-}
-
-async function signOut() {
-  'use server';
-  const supabase = createClient();
-  await supabase.auth.signOut();
-  redirect('/login');
 }

@@ -9,6 +9,28 @@ import { formatPrice, formatPct, pctClass, relativeTime } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
+async function deleteAlert(formData: FormData) {
+  'use server';
+  const id = String(formData.get('id'));
+  const sb = createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+  await sb.from('alerts').delete().eq('id', id).eq('user_id', user.id);
+  revalidatePath('/alerts');
+  redirect('/alerts');
+}
+
+async function toggleAlert(formData: FormData) {
+  'use server';
+  const id = String(formData.get('id'));
+  const nextActive = formData.get('next_active') === 'true';
+  const sb = createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+  await sb.from('alerts').update({ active: nextActive }).eq('id', id).eq('user_id', user.id);
+  revalidatePath(`/alerts/${id}`);
+}
+
 export default async function AlertDetail({ params }: { params: { id: string } }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -36,24 +58,8 @@ export default async function AlertDetail({ params }: { params: { id: string } }
     .order('sent_at', { ascending: false })
     .limit(20);
 
-  async function deleteAlert() {
-    'use server';
-    const sb = createClient();
-    const { data: { user: u } } = await sb.auth.getUser();
-    if (!u) return;
-    await sb.from('alerts').delete().eq('id', params.id).eq('user_id', u.id);
-    revalidatePath('/alerts');
-    redirect('/alerts');
-  }
-
-  async function toggleAlert() {
-    'use server';
-    const sb = createClient();
-    const { data: { user: u } } = await sb.auth.getUser();
-    if (!u) return;
-    await sb.from('alerts').update({ active: !alert.active }).eq('id', params.id).eq('user_id', u.id);
-    revalidatePath(`/alerts/${params.id}`);
-  }
+  const assetUnit = (alert.asset as { unit?: string | null } | null)?.unit;
+  const isUsd = assetUnit?.includes('USD') ?? false;
 
   return (
     <>
@@ -61,18 +67,21 @@ export default async function AlertDetail({ params }: { params: { id: string } }
       <main className="mx-auto max-w-3xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">{alert.asset?.name}</h1>
+            <h1 className="text-2xl font-bold">{(alert.asset as { name?: string } | null)?.name}</h1>
             <p className="text-sm text-zinc-500">
-              {alert.asset?.symbol} · alerta {alert.active ? 'ativo' : 'pausado'}
+              {(alert.asset as { symbol?: string } | null)?.symbol} · alerta {alert.active ? 'ativo' : 'pausado'}
             </p>
           </div>
           <div className="flex gap-2">
             <form action={toggleAlert}>
+              <input type="hidden" name="id" value={alert.id} />
+              <input type="hidden" name="next_active" value={String(!alert.active)} />
               <Button type="submit" variant="outline" size="sm">
                 {alert.active ? 'Pausar' : 'Ativar'}
               </Button>
             </form>
             <form action={deleteAlert}>
+              <input type="hidden" name="id" value={alert.id} />
               <Button type="submit" variant="destructive" size="sm">Excluir</Button>
             </form>
           </div>
@@ -110,7 +119,7 @@ export default async function AlertDetail({ params }: { params: { id: string } }
                       </span>
                       <span className="text-zinc-400">·</span>
                       <span className="text-zinc-700">
-                        {formatPrice(h.price_reference, alert.asset?.unit?.includes('USD') ? 'USD' : 'BRL')} → {formatPrice(h.price_now, alert.asset?.unit?.includes('USD') ? 'USD' : 'BRL')}
+                        {formatPrice(h.price_reference, isUsd ? 'USD' : 'BRL')} → {formatPrice(h.price_now, isUsd ? 'USD' : 'BRL')}
                       </span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{h.message}</p>
