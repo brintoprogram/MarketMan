@@ -5,8 +5,8 @@ export async function middleware(request: NextRequest) {
   return await updateSession(request);
 }
 
+// Roda só nas rotas que de fato precisam de sessão.
+// A landing (/) e arquivos estáticos passam direto, sem invocar Supabase.
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/whatsapp-webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'
-  ]
+  matcher: ['/dashboard/:path*', '/alerts/:path*', '/onboarding/:path*', '/login']
 };
