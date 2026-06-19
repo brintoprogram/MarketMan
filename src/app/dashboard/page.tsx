@@ -55,6 +55,7 @@ export default async function Dashboard() {
 
   const lastFetch = quotes?.[0]?.fetched_at;
   const hasData = (quotes?.length ?? 0) > 0;
+  const hasEnoughHistory = (quotes?.length ?? 0) > 20;
 
   return (
     <div className="min-h-screen bg-gradient-mesh">
@@ -75,7 +76,7 @@ export default async function Dashboard() {
               </p>
             </div>
             <div className="flex items-center gap-3 animate-fade-up-delay-1">
-              <RefreshButton />
+              <RefreshButton showBackfill={!hasEnoughHistory} />
               <Link href="/alerts/new">
                 <Button variant="brand" size="lg">
                   <Plus className="h-4 w-4" />
@@ -124,8 +125,21 @@ export default async function Dashboard() {
             <div className="flex-1">
               <p className="font-semibold text-amber-900">Sem cotações ainda</p>
               <p className="mt-1 text-sm text-amber-800">
-                O cron de cotação roda a cada 15 minutos. Se acabou de configurar a chave da brapi,
-                aguarde a próxima execução ou dispare manualmente a Edge Function <code className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs">fetch-quotes</code>.
+                Clique em <strong>"Carregar histórico real"</strong> pra puxar 30 dias de cotações da brapi.
+                Depois, <strong>"Atualizar agora"</strong> traz o preço corrente. O cron a cada 15min mantém atualizado depois.
+              </p>
+            </div>
+          </div>
+        )}
+        {hasData && !hasEnoughHistory && (
+          <div className="mb-8 flex items-start gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/60 p-5 shadow-soft animate-fade-up">
+            <div className="rounded-lg bg-sky-100 p-2 text-sky-700">
+              <RefreshCw className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-sky-900">Pouco histórico ainda</p>
+              <p className="mt-1 text-sm text-sky-800">
+                Os sparklines ficam mais ricos com mais pontos. Clique em <strong>"Carregar histórico real"</strong> pra puxar 30 dias da brapi de uma vez.
               </p>
             </div>
           </div>
