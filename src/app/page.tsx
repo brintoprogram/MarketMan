@@ -13,11 +13,11 @@ export default function Home() {
             MarketMan
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" size="sm">Entrar</Button>
+            <Link href="/api/demo">
+              <Button variant="ghost" size="sm">Modo demo</Button>
             </Link>
             <Link href="/login">
-              <Button variant="brand" size="sm">Criar conta</Button>
+              <Button variant="brand" size="sm">Entrar</Button>
             </Link>
           </div>
         </div>
@@ -38,10 +38,16 @@ export default function Home() {
           A gente vigia o mercado 24/7 e te avisa só quando vale a pena olhar.
         </p>
         <div className="flex justify-center gap-3">
+          <Link href="/api/demo">
+            <Button variant="brand" size="lg">🎮 Entrar como demo</Button>
+          </Link>
           <Link href="/login">
-            <Button variant="brand" size="lg">Começar grátis</Button>
+            <Button variant="outline" size="lg">Entrar com email</Button>
           </Link>
         </div>
+        <p className="mt-4 text-xs text-zinc-500">
+          Modo demo: te coloca direto no dashboard com um usuário de teste — sem cadastro, sem email.
+        </p>
       </section>
 
       {/* Features */}

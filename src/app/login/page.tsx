@@ -47,6 +47,15 @@ export default function LoginPage() {
           </CardHeader>
           {!sent && (
             <CardContent>
+              <Link href="/api/demo">
+                <Button type="button" variant="brand" className="mb-4 w-full">
+                  🎮 Entrar como demo (sem email)
+                </Button>
+              </Link>
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200" /></div>
+                <div className="relative flex justify-center text-xs"><span className="bg-white px-2 text-zinc-400">ou</span></div>
+              </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
