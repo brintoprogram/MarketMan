@@ -9,9 +9,9 @@ import { fmtPrice, fmtPct, arrow } from '../_shared/format.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const ZAPI_INSTANCE_ID = Deno.env.get('ZAPI_INSTANCE_ID') ?? '';
-const ZAPI_INSTANCE_TOKEN = Deno.env.get('ZAPI_INSTANCE_TOKEN') ?? '';
-const ZAPI_CLIENT_TOKEN = Deno.env.get('ZAPI_CLIENT_TOKEN') ?? '';
+const ZAPI_INSTANCE_ID = Deno.env.get('zapi_instance_id') ?? '';
+const ZAPI_INSTANCE_TOKEN = Deno.env.get('zapi_instance_token') ?? '';
+const ZAPI_CLIENT_TOKEN = Deno.env.get('zapi_client_token') ?? '';
 
 Deno.serve(async () => {
   const supa = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });

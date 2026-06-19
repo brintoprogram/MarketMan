@@ -8,7 +8,7 @@ import { BrapiClient, type BrapiKind } from '../_shared/brapi.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const BRAPI_TOKEN = Deno.env.get('BRAPI_TOKEN') ?? '';
+const BRAPI_TOKEN = Deno.env.get('token_brapi') ?? '';
 
 Deno.serve(async () => {
   const startedAt = Date.now();
@@ -16,7 +16,7 @@ Deno.serve(async () => {
 
   if (!BRAPI_TOKEN) {
     return new Response(
-      JSON.stringify({ error: 'BRAPI_TOKEN não configurado' }),
+      JSON.stringify({ error: 'token_brapi não configurado' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
   }

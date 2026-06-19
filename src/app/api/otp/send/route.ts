@@ -34,9 +34,9 @@ export async function POST(request: Request) {
 
   try {
     const zapi = new ZapiClient({
-      instanceId: process.env.ZAPI_INSTANCE_ID!,
-      instanceToken: process.env.ZAPI_INSTANCE_TOKEN!,
-      clientToken: process.env.ZAPI_CLIENT_TOKEN!
+      instanceId: process.env.zapi_instance_id!,
+      instanceToken: process.env.zapi_instance_token!,
+      clientToken: process.env.zapi_client_token!
     });
     await zapi.sendText(
       normalized,

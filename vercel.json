@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["gru1"],
+  "framework": "nextjs",
+  "functions": {
+    "src/app/api/whatsapp-webhook/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/otp/send/route.ts": {
+      "maxDuration": 15
+    }
+  }
+}

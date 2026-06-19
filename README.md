@@ -17,50 +17,58 @@ Define um % de variação e a gente te avisa quando o mercado se mexer.
    - Registra tudo em `alert_history`.
 4. O webhook em `/api/whatsapp-webhook` recebe respostas do WhatsApp e simplesmente **ignora** (HTTP 200, sem reply).
 
-## Tokens necessários
+## Deploy na Vercel — variáveis de ambiente
 
-Tudo já tá codado — você só precisa preencher:
+**Project Settings → Environments → Project (ou Shared) → Add Environment Variable.**
 
-### `.env.local` (Next.js)
-```bash
-cp .env.example .env.local
-```
+Marca todas como **Production + Preview** (Development opcional).
 
-| Variável | Onde pegar |
+### 🟢 Públicas — Sensitive: NÃO
+
+| Nome | Valor |
 |---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | [Dashboard → Settings → API → service_role (secret)](https://supabase.com/dashboard/project/tkzvcwbaqkmgasgzrllg/settings/api) |
-| `BRAPI_TOKEN` | Plano PRO em https://brapi.dev |
-| `ZAPI_INSTANCE_ID`, `ZAPI_INSTANCE_TOKEN` | Cria instância em https://app.z-api.io e escaneia QR |
-| `ZAPI_CLIENT_TOKEN` | Painel Z-API → Conta → Segurança (token único da conta) |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://tkzvcwbaqkmgasgzrllg.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | (já tá no [.env.example](./.env.example)) |
+| `NEXT_PUBLIC_APP_URL` | URL final do projeto na Vercel (ex: `https://market-man.vercel.app`) |
 
-### Edge Function secrets (Supabase)
+### 🔴 Secretas — Sensitive: SIM
 
-As mesmas chaves precisam ficar disponíveis pras Edge Functions também. Roda no [SQL Editor](https://supabase.com/dashboard/project/tkzvcwbaqkmgasgzrllg/sql) ou via CLI:
+| Nome | Onde pegar |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | [Supabase → Settings → API → service_role (secret)](https://supabase.com/dashboard/project/tkzvcwbaqkmgasgzrllg/settings/api) |
+| `token_brapi` | [brapi.dev](https://brapi.dev) (plano PRO) |
+| `zapi_instance_id` | Painel Z-API → lista de instâncias |
+| `zapi_instance_token` | Painel Z-API → na mesma tela da instância |
+| `zapi_client_token` | Painel Z-API → Conta → Segurança |
 
-```bash
-# Via CLI
-supabase secrets set --project-ref tkzvcwbaqkmgasgzrllg \
-  BRAPI_TOKEN=seu_token_aqui \
-  ZAPI_INSTANCE_ID=xxx \
-  ZAPI_INSTANCE_TOKEN=yyy \
-  ZAPI_CLIENT_TOKEN=zzz
-```
+> ⚠️ **Z-API tem 3 valores diferentes**, não 1. Se você criou só `token_zapi`, apaga e cria as 3 vars acima.
 
-Ou pelo Dashboard: **Edge Functions → Settings → Secrets**.
+### Edge Functions secrets (Supabase) — separado da Vercel!
+
+As Edge Functions rodam no Supabase, não na Vercel. Os mesmos secrets precisam existir lá também.
+
+**Dashboard → Edge Functions → Settings → Add new secret.** Cria com os nomes exatos:
+
+- `token_brapi`
+- `zapi_instance_id`
+- `zapi_instance_token`
+- `zapi_client_token`
+
+(`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já vêm injetados automaticamente nas Edge Functions — não precisa criar.)
 
 ### Webhook Z-API
 
-Aponta o webhook de mensagens recebidas pra:
+Depois do primeiro deploy, configura no painel Z-API → **Configurações → Webhooks → Ao receber mensagens**:
 
 ```
-https://SEU-DOMINIO/api/whatsapp-webhook
+https://SEU-DOMINIO-NA-VERCEL/api/whatsapp-webhook
 ```
-
-No painel Z-API: **Configurações → Webhooks → Ao receber mensagens** → cola a URL.
 
 ## Rodando localmente
 
-```bash
+```powershell
+Copy-Item .env.local.example .env.local
+# preenche os valores em .env.local
 npm install
 npm run dev
 ```
@@ -111,7 +119,7 @@ supabase/
 | `last_message` | Compara com o preço da última mensagem enviada. A cada disparo, o ponto de referência é atualizado. Bom pra alertar a cada variação X% incremental. |
 | `days` (7, 30, custom) | Compara com a cotação de N dias atrás. Pode disparar várias vezes seguidas se a variação acumulada continuar crescendo. |
 
-A mensagem inclui sempre o **percentual desde a última mensagem enviada**, mesmo quando a comparação é por dias — pra você saber o quanto andou desde o último ping.
+A mensagem inclui sempre o **percentual desde a última mensagem enviada**, mesmo quando a comparação é por dias.
 
 ## Mensagem padrão
 
@@ -139,7 +147,7 @@ select * from cron.job_run_details order by start_time desc limit 20;
 
 ```bash
 curl -X POST https://tkzvcwbaqkmgasgzrllg.supabase.co/functions/v1/fetch-quotes \
-  -H "Authorization: Bearer <anon-key>"
+  -H "Authorization: Bearer <NEXT_PUBLIC_SUPABASE_ANON_KEY>"
 ```
 
 ## Próximos passos sugeridos

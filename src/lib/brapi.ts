@@ -13,7 +13,7 @@ export interface BrapiQuoteResult {
 
 export class BrapiClient {
   constructor(private token: string) {
-    if (!token) throw new Error('BRAPI_TOKEN não configurado');
+    if (!token) throw new Error('token_brapi não configurado');
   }
 
   private async get<T>(path: string, query?: Record<string, string>): Promise<T> {
