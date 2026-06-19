@@ -17,15 +17,23 @@ export default async function NewAlertPage({ searchParams }: { searchParams: { a
     .order('display_order');
 
   return (
-    <>
+    <div className="min-h-screen bg-gradient-mesh">
       <AppNav />
-      <main className="mx-auto max-w-2xl px-6 py-8">
-        <h1 className="mb-2 text-2xl font-bold">Novo alerta</h1>
-        <p className="mb-8 text-sm text-zinc-500">
-          Escolha o ativo, a variação mínima pra disparar e o período de comparação.
-        </p>
+      <section className="relative border-b border-zinc-200/60">
+        <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />
+        <div className="relative mx-auto max-w-2xl px-6 py-10">
+          <div className="animate-fade-up">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-600">Novo alerta</div>
+            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">Configura um alerta</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              Escolha o ativo, a variação mínima pra disparar e o período de comparação.
+            </p>
+          </div>
+        </div>
+      </section>
+      <main className="mx-auto max-w-2xl px-6 py-10 animate-fade-up-delay-1">
         <AlertForm assets={assets ?? []} preselectedAssetId={searchParams.asset} />
       </main>
-    </>
+    </div>
   );
 }

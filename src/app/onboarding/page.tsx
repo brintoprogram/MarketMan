@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Coffee, MessageCircle } from 'lucide-react';
+import { Logo } from '@/components/logo';
+import { MessageCircle, ArrowLeft } from 'lucide-react';
 
 export default function Onboarding() {
   const router = useRouter();
@@ -18,8 +19,7 @@ export default function Onboarding() {
 
   async function sendOtp(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
+    setError(null); setLoading(true);
     const res = await fetch('/api/otp/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -27,17 +27,13 @@ export default function Onboarding() {
     });
     const data = await res.json();
     setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? 'Falha ao enviar código');
-      return;
-    }
+    if (!res.ok) { setError(data.error ?? 'Falha ao enviar código'); return; }
     setStep('otp');
   }
 
   async function verifyOtp(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
+    setError(null); setLoading(true);
     const res = await fetch('/api/otp/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -45,24 +41,22 @@ export default function Onboarding() {
     });
     const data = await res.json();
     setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? 'Código inválido');
-      return;
-    }
+    if (!res.ok) { setError(data.error ?? 'Código inválido'); return; }
     router.push('/dashboard');
     router.refresh();
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
-      <div className="w-full max-w-md">
-        <div className="mb-8 flex items-center justify-center gap-2 text-lg font-semibold">
-          <Coffee className="h-5 w-5 text-emerald-600" />
-          MarketMan
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-mesh px-6 py-12">
+      <div className="absolute inset-0 bg-grid pointer-events-none" />
+      <div className="absolute inset-0 bg-radial-fade pointer-events-none" />
+      <div className="relative w-full max-w-md animate-fade-up">
+        <div className="mb-8 flex items-center justify-center">
+          <Logo size="md" />
         </div>
-        <Card>
+        <Card className="shadow-elevated">
           <CardHeader>
-            <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-200/60">
               <MessageCircle className="h-5 w-5" />
             </div>
             <CardTitle>
@@ -70,8 +64,8 @@ export default function Onboarding() {
             </CardTitle>
             <CardDescription>
               {step === 'phone'
-                ? 'Vamos te enviar os alertas pelo WhatsApp. Confirma o número aqui.'
-                : `Enviamos um código de 6 dígitos pro ${phone}.`}
+                ? 'Vamos enviar seus alertas pelo WhatsApp. Confirma o número.'
+                : `Enviamos um código de 6 dígitos pra ${phone}.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -89,8 +83,10 @@ export default function Onboarding() {
                   />
                   <p className="text-xs text-zinc-500">DDD + número. Sem precisar do +55.</p>
                 </div>
-                {error && <p className="text-sm text-rose-600">{error}</p>}
-                <Button type="submit" variant="brand" className="w-full" disabled={loading}>
+                {error && (
+                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+                )}
+                <Button type="submit" variant="brand" className="w-full" disabled={loading} size="lg">
                   {loading ? 'Enviando...' : 'Enviar código no WhatsApp'}
                 </Button>
               </form>
@@ -103,22 +99,25 @@ export default function Onboarding() {
                     type="text"
                     inputMode="numeric"
                     maxLength={6}
-                    placeholder="123456"
+                    placeholder="••••••"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                     required
-                    className="text-center text-2xl tracking-widest"
+                    className="text-center text-2xl tracking-[0.6em] font-mono"
                   />
                 </div>
-                {error && <p className="text-sm text-rose-600">{error}</p>}
-                <Button type="submit" variant="brand" className="w-full" disabled={loading || otp.length !== 6}>
+                {error && (
+                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+                )}
+                <Button type="submit" variant="brand" className="w-full" disabled={loading || otp.length !== 6} size="lg">
                   {loading ? 'Verificando...' : 'Confirmar'}
                 </Button>
                 <button
                   type="button"
                   onClick={() => { setStep('phone'); setOtp(''); setError(null); }}
-                  className="w-full text-center text-sm text-zinc-500 hover:text-zinc-700"
+                  className="inline-flex w-full items-center justify-center gap-1.5 text-center text-sm text-zinc-500 transition hover:text-zinc-700"
                 >
+                  <ArrowLeft className="h-3.5 w-3.5" />
                   Mudar número
                 </button>
               </form>

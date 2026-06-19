@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { Coffee, LayoutDashboard, Bell, LogOut } from 'lucide-react';
+import { LayoutDashboard, Bell, LogOut, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { Logo } from '@/components/logo';
 
 async function signOut() {
   'use server';
@@ -11,23 +12,36 @@ async function signOut() {
 }
 
 export async function AppNav() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
-    <nav className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold">
-          <Coffee className="h-5 w-5 text-emerald-600" />
-          MarketMan
-        </Link>
-        <div className="flex items-center gap-1">
-          <NavLink href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />}>Dashboard</NavLink>
-          <NavLink href="/alerts" icon={<Bell className="h-4 w-4" />}>Alertas</NavLink>
+    <nav className="sticky top-0 z-40 glass">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+        <div className="flex items-center gap-8">
+          <Link href="/dashboard" className="transition-opacity hover:opacity-80">
+            <Logo size="sm" />
+          </Link>
+          <div className="hidden items-center gap-1 md:flex">
+            <NavLink href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />}>Dashboard</NavLink>
+            <NavLink href="/alerts" icon={<Bell className="h-4 w-4" />}>Alertas</NavLink>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {user?.email && (
+            <div className="hidden items-center gap-2 rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 sm:inline-flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+              {user.email === 'demo@marketman.app' ? 'Modo demo' : user.email}
+            </div>
+          )}
           <form action={signOut}>
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
             >
               <LogOut className="h-4 w-4" />
-              Sair
+              <span className="hidden sm:inline">Sair</span>
             </button>
           </form>
         </div>
@@ -40,10 +54,11 @@ function NavLink({ href, icon, children }: { href: string; icon: React.ReactNode
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100"
+      className="group inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-white hover:text-zinc-900 hover:shadow-soft"
     >
-      {icon}
+      <span className="text-zinc-400 transition group-hover:text-brand-600">{icon}</span>
       {children}
+      <ChevronRight className="h-3 w-3 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-50" />
     </Link>
   );
 }
