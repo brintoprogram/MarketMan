@@ -147,7 +147,7 @@ export default async function Dashboard() {
 
         <div className="mb-4 flex items-end justify-between">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-900">Acompanhamento</h2>
-          <p className="text-xs text-zinc-500">Toque num card pra criar alerta</p>
+          <p className="text-xs text-zinc-500">Toque num card pra ver detalhamento</p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,7 +165,7 @@ export default async function Dashboard() {
             return (
               <Link
                 key={asset.id}
-                href={`/alerts/new?asset=${asset.id}`}
+                href={`/dashboard/assets/${asset.id}`}
                 className="group card-hover relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-soft hover:border-brand-300/80 hover:shadow-lifted animate-fade-up"
                 style={{ animationDelay: `${animDelay * 40}ms` }}
               >
