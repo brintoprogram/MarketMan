@@ -4,6 +4,7 @@ import { AppNav } from '@/components/nav';
 import { Button } from '@/components/ui/button';
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
 import { Sparkline } from '@/components/ui/sparkline';
+import { RefreshButton } from '@/components/refresh-button';
 import { createClient } from '@/lib/supabase/server';
 import { formatPrice, formatPct, pctClass, relativeTime } from '@/lib/format';
 import { ArrowRight, Plus, Bell, Activity, RefreshCw, AlertCircle } from 'lucide-react';
@@ -74,6 +75,7 @@ export default async function Dashboard() {
               </p>
             </div>
             <div className="flex items-center gap-3 animate-fade-up-delay-1">
+              <RefreshButton />
               <Link href="/alerts/new">
                 <Button variant="brand" size="lg">
                   <Plus className="h-4 w-4" />
