@@ -54,6 +54,7 @@ export default async function AlertDetail({ params }: { params: { id: string } }
       target_price: number | null;
       target_direction: 'above' | 'below' | 'crosses' | null;
       message_template: string | null;
+      max_per_day: number | null;
       active: boolean;
       asset: { id: string; symbol: string; name: string; category: string; unit: string | null } | null;
     }>();
@@ -128,6 +129,7 @@ export default async function AlertDetail({ params }: { params: { id: string } }
             target_price: alert.target_price,
             target_direction: alert.target_direction,
             message_template: alert.message_template,
+            max_per_day: alert.max_per_day,
             active: alert.active
           }}
         />

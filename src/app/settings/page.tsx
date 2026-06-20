@@ -3,6 +3,7 @@ import { AppNav } from '@/components/nav';
 import { createClient } from '@/lib/supabase/server';
 import { SettingsForm } from '@/components/settings-form';
 import { QuietHoursForm } from '@/components/quiet-hours-form';
+import { DailyLimitForm } from '@/components/daily-limit-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Activity, AlertTriangle, Info, Clock, Gauge } from 'lucide-react';
@@ -48,10 +49,16 @@ export default async function Settings() {
       </section>
 
       <main className="mx-auto max-w-5xl space-y-8 px-6 py-10">
-        <QuietHoursForm
-          initialStart={(await supabase.from('profiles').select('quiet_hours_start').eq('id', user.id).single()).data?.quiet_hours_start ?? null}
-          initialEnd={(await supabase.from('profiles').select('quiet_hours_end').eq('id', user.id).single()).data?.quiet_hours_end ?? null}
-        />
+        {await (async () => {
+          const { data: prof } = await supabase.from('profiles').select('quiet_hours_start, quiet_hours_end, daily_message_limit').eq('id', user.id).single();
+          const { data: usage } = await supabase.rpc('count_user_messages_24h', { p_user_id: user.id });
+          return (
+            <>
+              <QuietHoursForm initialStart={prof?.quiet_hours_start ?? null} initialEnd={prof?.quiet_hours_end ?? null} />
+              <DailyLimitForm initialLimit={prof?.daily_message_limit ?? null} todayCount={typeof usage === 'number' ? usage : 0} />
+            </>
+          );
+        })()}
         <SettingsForm
           initialCronMinutes={cron?.minutes ?? 15}
           initialRateLimitEnabled={rate?.enabled ?? true}
@@ -134,6 +141,8 @@ export default async function Settings() {
             <Row label="Banco de dados" value="Postgres (Supabase, sa-east-1)" />
             <Row label="Coleta" value={`Cron pg_cron a cada ${cron?.minutes ?? 15} minutos`} />
             <Row label="Rate limit" value={rate?.enabled ? `${rate.limit}/dia (ativo)` : 'desligado'} />
+            <Row label="Retry" value="backoff exponencial 1m → 5m → 30m → 2h → 6h (máx 5)" />
+            <Row label="Webhook on-status" value="/api/whatsapp-status (configurar no painel Z-API)" />
           </CardContent>
         </Card>
       </main>

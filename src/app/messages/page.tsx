@@ -17,6 +17,8 @@ interface UnifiedMessage {
   status: 'sent' | 'failed' | 'queued' | 'replied';
   ref_label?: string;
   command?: string;
+  delivered_at?: string | null;
+  read_at?: string | null;
 }
 
 export default async function MessagesPage({ searchParams }: { searchParams: { kind?: string; status?: string } }) {
@@ -44,9 +46,20 @@ export default async function MessagesPage({ searchParams }: { searchParams: { k
     .order('created_at', { ascending: false })
     .limit(PAGE_SIZE);
 
+  // pega delivered_at/read_at de ambas as histories pra enriquecer
+  const histIds = (viewRows ?? []).map((v: any) => v.id);
+  const [{ data: alertExtras }, { data: reportExtras }] = await Promise.all([
+    histIds.length ? supabase.from('alert_history').select('id, delivered_at, read_at').in('id', histIds.filter((id, i) => (viewRows ?? [])[i].kind === 'alert')) : Promise.resolve({ data: [] } as any),
+    histIds.length ? supabase.from('scheduled_report_history').select('id, delivered_at, read_at').in('id', histIds.filter((id, i) => (viewRows ?? [])[i].kind === 'report')) : Promise.resolve({ data: [] } as any)
+  ]);
+  const extrasById = new Map<string, { delivered_at: string | null; read_at: string | null }>();
+  for (const r of (alertExtras ?? [])) extrasById.set(String(r.id), { delivered_at: r.delivered_at, read_at: r.read_at });
+  for (const r of (reportExtras ?? [])) extrasById.set(String(r.id), { delivered_at: r.delivered_at, read_at: r.read_at });
+
   // unificar
   const unified: UnifiedMessage[] = [];
   for (const v of viewRows ?? []) {
+    const extras = extrasById.get(String(v.id));
     unified.push({
       kind: v.kind as 'alert' | 'report',
       id: v.id,
@@ -55,7 +68,9 @@ export default async function MessagesPage({ searchParams }: { searchParams: { k
       status: v.status,
       ref_label: v.kind === 'alert'
         ? `${v.asset_symbol} · ${v.asset_name}`
-        : v.report_name ?? 'Relatório'
+        : v.report_name ?? 'Relatório',
+      delivered_at: extras?.delivered_at ?? null,
+      read_at: extras?.read_at ?? null
     });
   }
   if (filterKind === 'command' || !filterKind || filterKind === 'all') {
@@ -156,10 +171,18 @@ function MessageCard({ msg }: { msg: UnifiedMessage }) {
     command: { icon: <MessageSquare className="h-4 w-4" />, color: 'text-violet-700 bg-violet-50 ring-violet-200/60', label: 'Comando' }
   }[msg.kind];
 
-  const statusColor = msg.status === 'sent' ? 'text-emerald-600'
-    : msg.status === 'failed' ? 'text-rose-600'
-    : msg.status === 'replied' ? 'text-violet-600'
-    : 'text-amber-600';
+  // status efetivo prioriza leitura > entrega > envio
+  const effectiveStatus = msg.read_at ? 'read'
+    : msg.delivered_at ? 'delivered'
+    : msg.status;
+
+  const statusInfo = effectiveStatus === 'read' ? { color: 'text-sky-600',     label: 'lida' }
+    : effectiveStatus === 'delivered'           ? { color: 'text-emerald-600', label: 'entregue' }
+    : effectiveStatus === 'sent'                ? { color: 'text-emerald-600', label: 'enviada' }
+    : effectiveStatus === 'failed'              ? { color: 'text-rose-600',    label: 'falhou' }
+    : effectiveStatus === 'queued'              ? { color: 'text-amber-600',   label: 'tentando…' }
+    : effectiveStatus === 'replied'             ? { color: 'text-violet-600',  label: 'respondido' }
+    : { color: 'text-zinc-500', label: effectiveStatus };
 
   return (
     <div className="card-hover overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-soft hover:shadow-lifted">
@@ -175,8 +198,8 @@ function MessageCard({ msg }: { msg: UnifiedMessage }) {
               {msg.command && <code className="rounded bg-violet-50 px-1.5 py-0.5 font-mono text-[10px] text-violet-700">{msg.command}</code>}
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className={`font-semibold ${statusColor}`}>
-                {msg.status === 'sent' ? 'enviado' : msg.status === 'failed' ? 'falhou' : msg.status === 'replied' ? 'respondido' : msg.status}
+              <span className={`font-semibold ${statusInfo.color}`} title={msg.read_at ? `Lida em ${new Date(msg.read_at).toLocaleString('pt-BR')}` : msg.delivered_at ? `Entregue em ${new Date(msg.delivered_at).toLocaleString('pt-BR')}` : undefined}>
+                {effectiveStatus === 'read' ? '✓✓ ' : effectiveStatus === 'delivered' ? '✓✓ ' : effectiveStatus === 'sent' ? '✓ ' : ''}{statusInfo.label}
               </span>
               <span className="text-zinc-400">{relativeTime(msg.sent_at)}</span>
             </div>

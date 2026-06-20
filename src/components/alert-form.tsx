@@ -36,6 +36,7 @@ interface Props {
     target_direction: 'above' | 'below' | 'crosses' | null;
     message_template: string | null;
     active: boolean;
+    max_per_day?: number | null;
   };
 }
 
@@ -62,6 +63,7 @@ export function AlertForm({
     initial?.target_direction ?? preselectedTargetDirection ?? 'above'
   );
   const [template, setTemplate] = useState(initial?.message_template ?? '');
+  const [maxPerDay, setMaxPerDay] = useState<string>(initial?.max_per_day != null ? String(initial.max_per_day) : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +81,7 @@ export function AlertForm({
       asset_id: assetId,
       alert_type: alertType,
       message_template: template.trim() || null,
+      max_per_day: maxPerDay.trim() ? parseInt(maxPerDay, 10) : null,
       active: true
     };
 
@@ -257,6 +260,22 @@ export function AlertForm({
               </div>
             </>
           )}
+
+          {/* Limite por alerta */}
+          <div className="space-y-2">
+            <Label htmlFor="max-per-day">Máximo de avisos por dia (opcional)</Label>
+            <Input
+              id="max-per-day"
+              type="number" min="1" max="50"
+              value={maxPerDay}
+              onChange={(e) => setMaxPerDay(e.target.value)}
+              placeholder="deixe vazio pra ilimitado"
+              className="text-base"
+            />
+            <p className="text-xs text-zinc-500">
+              Limita quantas vezes esse alerta pode disparar em 24h. Útil pra alertas baseados em &quot;dias atrás&quot; que podem disparar várias vezes seguidas.
+            </p>
+          </div>
 
           {/* Template msg */}
           <div className="space-y-2">
