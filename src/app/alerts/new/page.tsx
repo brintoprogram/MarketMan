@@ -5,7 +5,7 @@ import { AlertForm } from '@/components/alert-form';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewAlertPage({ searchParams }: { searchParams: { asset?: string; threshold?: string } }) {
+export default async function NewAlertPage({ searchParams }: { searchParams: { asset?: string; threshold?: string; target?: string; direction?: 'above' | 'below' | 'crosses' } }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -36,6 +36,8 @@ export default async function NewAlertPage({ searchParams }: { searchParams: { a
           assets={assets ?? []}
           preselectedAssetId={searchParams.asset}
           preselectedThreshold={searchParams.threshold}
+          preselectedTarget={searchParams.target}
+          preselectedTargetDirection={searchParams.direction}
         />
       </main>
     </div>

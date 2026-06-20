@@ -17,7 +17,8 @@ export default async function AlertsList() {
   const { data: alerts } = await supabase
     .from('alerts')
     .select(`
-      id, threshold_pct, comparison_type, comparison_days, active, reference_price, last_notified_at, created_at,
+      id, alert_type, threshold_pct, comparison_type, comparison_days, active, reference_price, last_notified_at, created_at,
+      target_price, target_direction,
       asset:assets(symbol, name, category, unit)
     `)
     .eq('user_id', user.id)
@@ -89,9 +90,22 @@ export default async function AlertsList() {
                       <span className="font-mono text-xs text-zinc-400">{a.asset?.symbol}</span>
                     </div>
                     <p className="mt-1.5 text-sm text-zinc-600">
-                      Variação ≥ <strong className="font-semibold text-zinc-900">{a.threshold_pct}%</strong>
-                      {' · '}
-                      <span className="text-zinc-500">{comparisonLabel(a.comparison_type, a.comparison_days)}</span>
+                      {a.alert_type === 'price_target' ? (
+                        <>
+                          Avisa quando o preço{' '}
+                          <strong className="font-semibold text-zinc-900">
+                            {directionLabel(a.target_direction)} {Number(a.target_price).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                          </strong>
+                          {' '}
+                          <span className="font-mono text-xs text-zinc-400">{a.asset?.unit}</span>
+                        </>
+                      ) : (
+                        <>
+                          Variação ≥ <strong className="font-semibold text-zinc-900">{a.threshold_pct}%</strong>
+                          {' · '}
+                          <span className="text-zinc-500">{comparisonLabel(a.comparison_type, a.comparison_days)}</span>
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -126,4 +140,11 @@ function comparisonLabel(type: string, days: number | null) {
   if (type === 'days' && days === 30) return 'comparando com 30 dias atrás';
   if (type === 'days') return `comparando com ${days} dias atrás`;
   return type;
+}
+
+function directionLabel(d: string | null): string {
+  if (d === 'above') return 'subir acima de';
+  if (d === 'below') return 'cair abaixo de';
+  if (d === 'crosses') return 'cruzar';
+  return 'atingir';
 }

@@ -44,7 +44,19 @@ export default async function AlertDetail({ params }: { params: { id: string } }
     .select('*, asset:assets(id, symbol, name, category, unit)')
     .eq('id', params.id)
     .eq('user_id', user.id)
-    .single();
+    .single<{
+      id: string;
+      asset_id: string;
+      alert_type: 'percentage' | 'price_target';
+      threshold_pct: number;
+      comparison_type: 'last_message' | 'days';
+      comparison_days: number | null;
+      target_price: number | null;
+      target_direction: 'above' | 'below' | 'crosses' | null;
+      message_template: string | null;
+      active: boolean;
+      asset: { id: string; symbol: string; name: string; category: string; unit: string | null } | null;
+    }>();
 
   if (!alert) notFound();
 
@@ -109,9 +121,12 @@ export default async function AlertDetail({ params }: { params: { id: string } }
           initial={{
             id: alert.id,
             asset_id: alert.asset_id,
+            alert_type: alert.alert_type ?? 'percentage',
             threshold_pct: alert.threshold_pct,
             comparison_type: alert.comparison_type,
             comparison_days: alert.comparison_days,
+            target_price: alert.target_price,
+            target_direction: alert.target_direction,
             message_template: alert.message_template,
             active: alert.active
           }}

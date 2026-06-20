@@ -194,24 +194,24 @@ export function CalculatorForm({ assets, latestByAsset, usdBrl, preselectedAsset
             </CardContent>
           )}
 
-          {asset && useTargetPrice && (
+          {asset && useTargetPrice && Number.isFinite(effectivePrice) && effectivePrice > 0 && (
             <CardContent className="border-t border-zinc-100 bg-zinc-50/30 pt-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-semibold text-zinc-900">Quer ser avisado quando atingir esse preço?</p>
                   <p className="mt-0.5 text-xs text-zinc-500">
-                    Criamos um alerta com base na variação % entre o preço atual e seu alvo.
+                    Criamos um alerta de preço-alvo absoluto que dispara quando o preço
+                    {(deltaPct ?? 0) >= 0 ? ' subir acima ' : ' cair abaixo '}
+                    desse valor.
                   </p>
                 </div>
-                {deltaPct != null && Number.isFinite(deltaPct) && (
-                  <Link href={`/alerts/new?asset=${asset.id}&threshold=${Math.abs(deltaPct).toFixed(2)}`}>
-                    <Button variant="brand">
-                      <Bell className="h-4 w-4" />
-                      Criar alerta de ±{Math.abs(deltaPct).toFixed(2)}%
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                )}
+                <Link href={`/alerts/new?asset=${asset.id}&target=${effectivePrice}&direction=${(deltaPct ?? 0) >= 0 ? 'above' : 'below'}`}>
+                  <Button variant="brand">
+                    <Bell className="h-4 w-4" />
+                    Criar alerta no preço {effectivePrice.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           )}

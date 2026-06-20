@@ -5,10 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
 import { Sparkline } from '@/components/ui/sparkline';
+import { PriceChart, type PricePoint } from '@/components/price-chart';
 import { TestAssetButton } from '@/components/test-asset-button';
+import { ConvertedPrice } from '@/components/converted-price';
 import { createClient } from '@/lib/supabase/server';
 import { formatPrice, formatPct, pctClass, relativeTime } from '@/lib/format';
-import { ArrowLeft, Plus, ExternalLink, Database, Activity, AlertCircle, AlertTriangle, Info, CheckCircle } from 'lucide-react';
+import { getAlternateUnits } from '@/lib/conversions';
+import { ArrowLeft, Plus, ExternalLink, Database, Activity, AlertCircle, AlertTriangle, Info, CheckCircle, Repeat, Calculator } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +31,12 @@ export default async function AssetDetail({ params }: { params: { id: string } }
     .from('quotes').select('id, price, fetched_at, source, raw')
     .eq('asset_id', asset.id)
     .order('fetched_at', { ascending: false })
-    .limit(120);
+    .limit(1000);
+
+  // série ascendente pro chart
+  const chartData: PricePoint[] = (quotes ?? [])
+    .map((q) => ({ time: Math.floor(new Date(q.fetched_at).getTime() / 1000), price: Number(q.price) }))
+    .sort((a, b) => a.time - b.time);
 
   const series = (quotes ?? []).map((q) => ({ price: Number(q.price), fetched_at: q.fetched_at, source: q.source }));
   const latest = series[0];
@@ -42,7 +50,7 @@ export default async function AssetDetail({ params }: { params: { id: string } }
 
   const { data: alerts } = await supabase
     .from('alerts')
-    .select('id, threshold_pct, comparison_type, comparison_days, active, reference_price, last_notified_at')
+    .select('id, alert_type, threshold_pct, comparison_type, comparison_days, target_price, target_direction, active, reference_price, last_notified_at')
     .eq('asset_id', asset.id)
     .eq('user_id', user.id);
 
@@ -115,25 +123,33 @@ export default async function AssetDetail({ params }: { params: { id: string } }
           {/* Preço atual */}
           <Card className="shadow-lifted">
             <CardContent className="pt-6">
-              <div className="mb-4 flex items-end justify-between">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Preço atual</div>
-                  <div className="mt-1 text-5xl font-bold tabular-nums tracking-tight text-zinc-900">
-                    {latest ? formatPrice(latest.price, isUsd ? 'USD' : 'BRL') : '—'}
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Preço atual</div>
+                <div className="mt-1 flex items-baseline justify-between gap-4">
+                  <div>
+                    <div className="text-5xl font-bold tabular-nums tracking-tight text-zinc-900">
+                      {latest ? formatPrice(latest.price, isUsd ? 'USD' : 'BRL') : '—'}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-sm">
+                      <span className={`font-semibold tabular-nums ${pctClass(pct)}`}>{formatPct(pct)}</span>
+                      <span className="text-zinc-400">·</span>
+                      <span className="text-zinc-500">{series.length} pontos coletados</span>
+                    </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-sm">
-                    <span className={`font-semibold tabular-nums ${pctClass(pct)}`}>{formatPct(pct)}</span>
-                    <span className="text-zinc-400">·</span>
-                    <span className="text-zinc-500">{series.length} pontos coletados</span>
-                  </div>
+                  {asset.unit && (
+                    <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-1.5 text-xs font-mono text-zinc-600">
+                      {asset.unit}
+                    </div>
+                  )}
                 </div>
-                <Sparkline points={sparkPoints} positive={(pct ?? 0) >= 0} height={80} width={260} />
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-4 border-t border-zinc-100 pt-4 text-sm">
-                <Mini label="Mínima" value={min != null ? formatPrice(min, isUsd ? 'USD' : 'BRL') : '—'} />
-                <Mini label="Máxima" value={max != null ? formatPrice(max, isUsd ? 'USD' : 'BRL') : '—'} />
-                <Mini label="Unidade" value={asset.unit ?? '—'} mono />
-              </div>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico real (lightweight-charts) */}
+          <Card className="shadow-lifted">
+            <CardContent className="pt-6">
+              <PriceChart data={chartData} unit={asset.unit} height={380} />
             </CardContent>
           </Card>
 
@@ -267,10 +283,21 @@ export default async function AssetDetail({ params }: { params: { id: string } }
                 <Link key={a.id} href={`/alerts/${a.id}`} className="block rounded-lg border border-zinc-200 bg-white p-3 text-sm transition hover:border-brand-300 hover:shadow-soft">
                   <div className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 rounded-full ${a.active ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
-                    <span className="font-semibold text-zinc-900">≥ {a.threshold_pct}%</span>
-                    <span className="text-zinc-500">
-                      {a.comparison_type === 'last_message' ? 'desde última msg' : `${a.comparison_days}d atrás`}
-                    </span>
+                    {a.alert_type === 'price_target' ? (
+                      <>
+                        <span className="text-xs text-zinc-500">{a.target_direction === 'above' ? '≥' : a.target_direction === 'below' ? '≤' : '↔'}</span>
+                        <span className="font-mono font-semibold text-zinc-900">
+                          {Number(a.target_price).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-zinc-900">≥ {a.threshold_pct}%</span>
+                        <span className="text-zinc-500">
+                          {a.comparison_type === 'last_message' ? 'desde última msg' : `${a.comparison_days}d atrás`}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </Link>
               ))}
