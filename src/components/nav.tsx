@@ -3,6 +3,7 @@ import { LayoutDashboard, Bell, LogOut, ChevronRight, Settings, Calculator, Cale
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { Logo } from '@/components/logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 async function signOut() {
   'use server';
@@ -35,6 +36,7 @@ export async function AppNav() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           {user?.email && (
             <div className="hidden items-center gap-2 rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 sm:inline-flex">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
