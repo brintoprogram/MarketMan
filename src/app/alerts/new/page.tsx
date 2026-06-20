@@ -5,7 +5,7 @@ import { AlertForm } from '@/components/alert-form';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewAlertPage({ searchParams }: { searchParams: { asset?: string } }) {
+export default async function NewAlertPage({ searchParams }: { searchParams: { asset?: string; threshold?: string } }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -32,7 +32,11 @@ export default async function NewAlertPage({ searchParams }: { searchParams: { a
         </div>
       </section>
       <main className="mx-auto max-w-2xl px-6 py-10 animate-fade-up-delay-1">
-        <AlertForm assets={assets ?? []} preselectedAssetId={searchParams.asset} />
+        <AlertForm
+          assets={assets ?? []}
+          preselectedAssetId={searchParams.asset}
+          preselectedThreshold={searchParams.threshold}
+        />
       </main>
     </div>
   );

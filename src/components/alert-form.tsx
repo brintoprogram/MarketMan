@@ -21,6 +21,7 @@ interface Asset {
 interface Props {
   assets: Asset[];
   preselectedAssetId?: string;
+  preselectedThreshold?: string;
   initial?: {
     id: string;
     asset_id: string;
@@ -32,10 +33,10 @@ interface Props {
   };
 }
 
-export function AlertForm({ assets, preselectedAssetId, initial }: Props) {
+export function AlertForm({ assets, preselectedAssetId, preselectedThreshold, initial }: Props) {
   const router = useRouter();
   const [assetId, setAssetId] = useState(initial?.asset_id ?? preselectedAssetId ?? assets[0]?.id ?? '');
-  const [threshold, setThreshold] = useState(String(initial?.threshold_pct ?? 1));
+  const [threshold, setThreshold] = useState(String(initial?.threshold_pct ?? preselectedThreshold ?? 1));
   const [comparison, setComparison] = useState<'last_message' | '7d' | '30d' | 'custom'>(
     initial
       ? initial.comparison_type === 'last_message'

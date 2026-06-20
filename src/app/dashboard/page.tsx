@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
 import { Sparkline } from '@/components/ui/sparkline';
 import { RefreshButton } from '@/components/refresh-button';
+import { ConvertedPrice } from '@/components/converted-price';
 import { createClient } from '@/lib/supabase/server';
 import { formatPrice, formatPct, pctClass, relativeTime } from '@/lib/format';
+import { getAlternateUnits } from '@/lib/conversions';
 import { ArrowRight, Plus, Bell, Activity, RefreshCw, AlertCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -21,9 +23,22 @@ export default async function Dashboard() {
 
   const { data: assets } = await supabase
     .from('assets')
-    .select('id, symbol, name, category, unit')
+    .select('id, symbol, name, category, unit, brapi_kind')
     .eq('active', true)
     .order('display_order');
+
+  // USDBRL atual (pra conversões automáticas) — pega cotação mais recente
+  const usdAsset = (assets ?? []).find((a) => a.symbol === 'USDBRL');
+  let usdBrl: number | null = null;
+  if (usdAsset) {
+    const { data: usdQuote } = await supabase
+      .from('quotes')
+      .select('price')
+      .eq('asset_id', usdAsset.id)
+      .order('fetched_at', { ascending: false })
+      .limit(1).maybeSingle();
+    if (usdQuote) usdBrl = Number(usdQuote.price);
+  }
 
   const assetIds = (assets ?? []).map((a) => a.id);
   const { data: quotes } = await supabase
@@ -189,10 +204,15 @@ export default async function Dashboard() {
 
                 {/* Price + pct */}
                 <div className="flex items-end justify-between">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-3xl font-bold tabular-nums tracking-tight text-zinc-900">
                       {latest ? formatPrice(latest.price, isUsd ? 'USD' : 'BRL') : '—'}
                     </div>
+                    {latest && (
+                      <ConvertedPrice
+                        alternates={getAlternateUnits(asset, latest.price, usdBrl).slice(0, 1)}
+                      />
+                    )}
                     <div className="mt-1 flex items-center gap-1.5 text-xs">
                       <span className={`font-semibold tabular-nums ${pctClass(pct)}`}>{formatPct(pct)}</span>
                       <span className="text-zinc-400">·</span>

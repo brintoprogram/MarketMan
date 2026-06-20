@@ -46,6 +46,18 @@ export default async function AssetDetail({ params }: { params: { id: string } }
     .eq('asset_id', asset.id)
     .eq('user_id', user.id);
 
+  // USDBRL atual pra conversões
+  const { data: usdAsset } = await supabase.from('assets').select('id').eq('symbol', 'USDBRL').single();
+  let usdBrl: number | null = null;
+  if (usdAsset) {
+    const { data: usdQuote } = await supabase
+      .from('quotes').select('price')
+      .eq('asset_id', usdAsset.id)
+      .order('fetched_at', { ascending: false }).limit(1).maybeSingle();
+    if (usdQuote) usdBrl = Number(usdQuote.price);
+  }
+  const alternates = latest ? getAlternateUnits(asset, latest.price, usdBrl) : [];
+
   const { data: logs } = await supabase
     .from('system_logs')
     .select('id, level, source, event, request_url, response_status, response_body, error_message, duration_ms, metadata, created_at')
@@ -124,6 +136,31 @@ export default async function AssetDetail({ params }: { params: { id: string } }
               </div>
             </CardContent>
           </Card>
+
+          {/* Em outras unidades */}
+          {alternates.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Repeat className="h-5 w-5 text-brand-600" />Em outras unidades</CardTitle>
+                <CardDescription>
+                  Conversões automáticas {usdBrl ? `· USD/BRL = R$ ${usdBrl.toFixed(4)}` : ''}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ConvertedPrice alternates={alternates} variant="block" />
+                <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50/50 p-3 text-xs text-zinc-600">
+                  <p>
+                    Cálculos derivados de: 1 saca = 60 kg ≈ 132,28 lb · 1 arroba = 15 kg ≈ 33,07 lb · 1 oz troy = 31,10 g.
+                    Conversões com BRL/USD usam a cotação spot do USDBRL mais recente coletada.
+                  </p>
+                  <Link href={`/calculator?asset=${asset.id}`} className="mt-2 inline-flex items-center gap-1 text-brand-700 hover:underline">
+                    <Calculator className="h-3 w-3" />
+                    Abrir no conversor de venda →
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Fonte dos dados */}
           <Card>
