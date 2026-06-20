@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { AppNav } from '@/components/nav';
 import { createClient } from '@/lib/supabase/server';
 import { SettingsForm } from '@/components/settings-form';
+import { QuietHoursForm } from '@/components/quiet-hours-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Activity, AlertTriangle, Info, Clock, Gauge } from 'lucide-react';
@@ -47,6 +48,10 @@ export default async function Settings() {
       </section>
 
       <main className="mx-auto max-w-5xl space-y-8 px-6 py-10">
+        <QuietHoursForm
+          initialStart={(await supabase.from('profiles').select('quiet_hours_start').eq('id', user.id).single()).data?.quiet_hours_start ?? null}
+          initialEnd={(await supabase.from('profiles').select('quiet_hours_end').eq('id', user.id).single()).data?.quiet_hours_end ?? null}
+        />
         <SettingsForm
           initialCronMinutes={cron?.minutes ?? 15}
           initialRateLimitEnabled={rate?.enabled ?? true}
