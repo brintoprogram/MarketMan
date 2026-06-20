@@ -151,6 +151,25 @@ export default async function Dashboard() {
             </div>
           </div>
         )}
+        {(alertCount ?? 0) === 0 && (
+          <div className="mb-8 flex items-start justify-between gap-4 rounded-2xl border border-brand-200/60 bg-brand-50/40 p-5 shadow-soft animate-fade-up">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-brand-100 p-2 text-brand-700">
+                <Bell className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-brand-900">Sem alertas? Use um template pronto</p>
+                <p className="mt-1 text-sm text-brand-800">
+                  Escolha seu perfil (trader de café, produtor de grãos, pecuarista…) e a gente cria
+                  alertas + relatório diário em 1 clique.
+                </p>
+              </div>
+            </div>
+            <Link href="/templates">
+              <Button variant="brand">Ver templates</Button>
+            </Link>
+          </div>
+        )}
         {hasData && !hasEnoughHistory && (
           <div className="mb-8 flex items-start gap-3 rounded-2xl border border-sky-200/80 bg-sky-50/60 p-5 shadow-soft animate-fade-up">
             <div className="rounded-lg bg-sky-100 p-2 text-sky-700">

@@ -16,6 +16,11 @@ export default async function NewReportPage() {
     .eq('active', true)
     .order('display_order');
 
+  const { data: recipients } = await supabase
+    .from('recipients').select('id, name, phone, is_self')
+    .eq('user_id', user.id).eq('verified', true)
+    .order('is_self', { ascending: false });
+
   return (
     <div className="min-h-screen bg-gradient-mesh">
       <AppNav />
@@ -32,7 +37,7 @@ export default async function NewReportPage() {
         </div>
       </section>
       <main className="mx-auto max-w-2xl px-6 py-10 animate-fade-up-delay-1">
-        <ReportForm assets={assets ?? []} />
+        <ReportForm assets={assets ?? []} recipients={(recipients ?? []) as any} />
       </main>
     </div>
   );

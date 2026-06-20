@@ -16,6 +16,13 @@ export default async function NewAlertPage({ searchParams }: { searchParams: { a
     .eq('active', true)
     .order('display_order');
 
+  const { data: recipients } = await supabase
+    .from('recipients')
+    .select('id, name, phone, is_self')
+    .eq('user_id', user.id)
+    .eq('verified', true)
+    .order('is_self', { ascending: false });
+
   return (
     <div className="min-h-screen bg-gradient-mesh">
       <AppNav />
@@ -34,6 +41,7 @@ export default async function NewAlertPage({ searchParams }: { searchParams: { a
       <main className="mx-auto max-w-2xl px-6 py-10 animate-fade-up-delay-1">
         <AlertForm
           assets={assets ?? []}
+          recipients={(recipients ?? []) as any}
           preselectedAssetId={searchParams.asset}
           preselectedThreshold={searchParams.threshold}
           preselectedTarget={searchParams.target}

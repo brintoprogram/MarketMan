@@ -53,6 +53,11 @@ export default async function ReportDetail({ params }: { params: { id: string } 
     .eq('active', true)
     .order('display_order');
 
+  const { data: recipients } = await supabase
+    .from('recipients').select('id, name, phone, is_self')
+    .eq('user_id', user.id).eq('verified', true)
+    .order('is_self', { ascending: false });
+
   const { data: history } = await supabase
     .from('scheduled_report_history')
     .select('id, status, message, trigger_kind, sent_at')
@@ -98,6 +103,7 @@ export default async function ReportDetail({ params }: { params: { id: string } 
       <main className="mx-auto max-w-3xl px-6 py-10 animate-fade-up-delay-1">
         <ReportForm
           assets={assets ?? []}
+          recipients={(recipients ?? []) as any}
           initial={{
             id: report.id,
             name: report.name,
@@ -107,7 +113,8 @@ export default async function ReportDetail({ params }: { params: { id: string } 
             include_volume: report.include_volume,
             include_spread: report.include_spread,
             message_header: report.message_header,
-            message_footer: report.message_footer
+            message_footer: report.message_footer,
+            recipient_ids: report.recipient_ids ?? []
           }}
         />
 

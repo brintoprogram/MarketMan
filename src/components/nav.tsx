@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { LayoutDashboard, Bell, LogOut, ChevronRight, Settings, Calculator } from 'lucide-react';
+import { LayoutDashboard, Bell, LogOut, ChevronRight, Settings, Calculator, CalendarClock, MessageCircle, Users, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { Logo } from '@/components/logo';
@@ -24,10 +24,12 @@ export async function AppNav() {
           </Link>
           <div className="hidden items-center gap-1 md:flex">
             <NavLink href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />}>Dashboard</NavLink>
-            <NavLink href="/calculator" icon={<Calculator className="h-4 w-4" />}>Conversor</NavLink>
             <NavLink href="/alerts" icon={<Bell className="h-4 w-4" />}>Alertas</NavLink>
             <NavLink href="/reports" icon={<CalendarClock className="h-4 w-4" />}>Relatórios</NavLink>
+            <NavLink href="/recipients" icon={<Users className="h-4 w-4" />}>Destinatários</NavLink>
             <NavLink href="/messages" icon={<MessageCircle className="h-4 w-4" />}>Mensagens</NavLink>
+            <NavLink href="/templates" icon={<Sparkles className="h-4 w-4" />}>Templates</NavLink>
+            <NavLink href="/calculator" icon={<Calculator className="h-4 w-4" />}>Conversor</NavLink>
             <NavLink href="/settings" icon={<Settings className="h-4 w-4" />}>Configurações</NavLink>
           </div>
         </div>

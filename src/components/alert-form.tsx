@@ -9,7 +9,8 @@ import { Select } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
-import { Percent, Target, TrendingUp, TrendingDown, Repeat } from 'lucide-react';
+import { RecipientPicker, type RecipientOption } from '@/components/recipient-picker';
+import { Percent, Target, TrendingUp, TrendingDown, Repeat, Users } from 'lucide-react';
 
 interface Asset {
   id: string;
@@ -21,6 +22,7 @@ interface Asset {
 
 interface Props {
   assets: Asset[];
+  recipients?: RecipientOption[];
   preselectedAssetId?: string;
   preselectedThreshold?: string;
   preselectedTarget?: string;
@@ -37,11 +39,12 @@ interface Props {
     message_template: string | null;
     active: boolean;
     max_per_day?: number | null;
+    recipient_ids?: string[] | null;
   };
 }
 
 export function AlertForm({
-  assets, preselectedAssetId, preselectedThreshold,
+  assets, recipients = [], preselectedAssetId, preselectedThreshold,
   preselectedTarget, preselectedTargetDirection, initial
 }: Props) {
   const router = useRouter();
@@ -64,6 +67,7 @@ export function AlertForm({
   );
   const [template, setTemplate] = useState(initial?.message_template ?? '');
   const [maxPerDay, setMaxPerDay] = useState<string>(initial?.max_per_day != null ? String(initial.max_per_day) : '');
+  const [recipientIds, setRecipientIds] = useState<string[]>(initial?.recipient_ids ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +86,7 @@ export function AlertForm({
       alert_type: alertType,
       message_template: template.trim() || null,
       max_per_day: maxPerDay.trim() ? parseInt(maxPerDay, 10) : null,
+      recipient_ids: recipientIds,
       active: true
     };
 

@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
+import { RecipientPicker, type RecipientOption } from '@/components/recipient-picker';
 import { createClient } from '@/lib/supabase/client';
-import { Clock, Layers, BarChart3, Calendar, Search } from 'lucide-react';
+import { Clock, Layers, BarChart3, Calendar, Search, Users } from 'lucide-react';
 
 interface Asset {
   id: string;
@@ -21,6 +22,7 @@ interface Asset {
 
 interface Props {
   assets: Asset[];
+  recipients?: RecipientOption[];
   initial?: {
     id: string;
     name: string;
@@ -31,6 +33,7 @@ interface Props {
     include_spread: boolean;
     message_header: string | null;
     message_footer: string | null;
+    recipient_ids?: string[] | null;
   };
 }
 
@@ -51,7 +54,7 @@ const VARIATION_OPTIONS = [
   { value: '30d', label: '30 dias' }
 ];
 
-export function ReportForm({ assets, initial }: Props) {
+export function ReportForm({ assets, recipients = [], initial }: Props) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? 'Resumo diário');
   const [cron, setCron] = useState(initial?.cron_expression ?? '0 11 * * 1-5');
@@ -64,6 +67,7 @@ export function ReportForm({ assets, initial }: Props) {
   const [includeSpread, setIncludeSpread] = useState(initial?.include_spread ?? false);
   const [header, setHeader] = useState(initial?.message_header ?? '');
   const [footer, setFooter] = useState(initial?.message_footer ?? '');
+  const [recipientIds, setRecipientIds] = useState<string[]>(initial?.recipient_ids ?? []);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +115,7 @@ export function ReportForm({ assets, initial }: Props) {
       include_spread: includeSpread,
       message_header: header.trim() || null,
       message_footer: footer.trim() || null,
+      recipient_ids: recipientIds,
       active: true
     };
 
@@ -249,6 +254,14 @@ export function ReportForm({ assets, initial }: Props) {
               onChange={setIncludeSpread}
             />
           </div>
+
+          {/* Destinatários */}
+          {recipients.length > 0 && (
+            <div className="space-y-2">
+              <Label><Users className="mr-1 inline h-3.5 w-3.5" />Quem recebe</Label>
+              <RecipientPicker recipients={recipients} value={recipientIds} onChange={setRecipientIds} />
+            </div>
+          )}
 
           {/* Header/Footer */}
           <details className="rounded-lg border border-zinc-200 bg-zinc-50/30">

@@ -67,6 +67,11 @@ export default async function AlertDetail({ params }: { params: { id: string } }
     .eq('active', true)
     .order('display_order');
 
+  const { data: recipients } = await supabase
+    .from('recipients').select('id, name, phone, is_self')
+    .eq('user_id', user.id).eq('verified', true)
+    .order('is_self', { ascending: false });
+
   const { data: history } = await supabase
     .from('alert_history')
     .select('id, price_now, price_reference, pct_change, message, sent_at, status')
@@ -119,6 +124,7 @@ export default async function AlertDetail({ params }: { params: { id: string } }
       <main className="mx-auto max-w-3xl px-6 py-10 animate-fade-up-delay-1">
         <AlertForm
           assets={assets ?? []}
+          recipients={(recipients ?? []) as any}
           initial={{
             id: alert.id,
             asset_id: alert.asset_id,
@@ -130,6 +136,7 @@ export default async function AlertDetail({ params }: { params: { id: string } }
             target_direction: alert.target_direction,
             message_template: alert.message_template,
             max_per_day: alert.max_per_day,
+            recipient_ids: (alert as any).recipient_ids ?? [],
             active: alert.active
           }}
         />
