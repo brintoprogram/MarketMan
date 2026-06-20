@@ -8,8 +8,9 @@ import { RefreshButton } from '@/components/refresh-button';
 import { ConvertedPrice } from '@/components/converted-price';
 import { createClient } from '@/lib/supabase/server';
 import { formatPrice, formatPct, pctClass, relativeTime } from '@/lib/format';
+import { formatVolumeBRL } from '@/lib/format-extras';
 import { getAlternateUnits } from '@/lib/conversions';
-import { ArrowRight, Plus, Bell, Activity, RefreshCw, AlertCircle } from 'lucide-react';
+import { ArrowRight, Plus, Bell, Activity, RefreshCw, AlertCircle, BarChart3 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,17 +44,21 @@ export default async function Dashboard() {
   const assetIds = (assets ?? []).map((a) => a.id);
   const { data: quotes } = await supabase
     .from('quotes')
-    .select('asset_id, price, fetched_at')
+    .select('asset_id, price, fetched_at, volume_brl')
     .in('asset_id', assetIds)
     .gte('fetched_at', new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString())
     .order('fetched_at', { ascending: false });
 
   // organize quotes by asset for sparkline + 24h comparison
   const seriesByAsset = new Map<string, Array<{ price: number; fetched_at: string }>>();
+  const lastVolumeByAsset = new Map<string, number>();
   for (const q of quotes ?? []) {
     const arr = seriesByAsset.get(q.asset_id) ?? [];
     arr.push({ price: Number(q.price), fetched_at: q.fetched_at });
     seriesByAsset.set(q.asset_id, arr);
+    if (q.volume_brl != null && !lastVolumeByAsset.has(q.asset_id)) {
+      lastVolumeByAsset.set(q.asset_id, Number(q.volume_brl));
+    }
   }
 
   const { count: alertCount } = await supabase
@@ -224,7 +229,15 @@ export default async function Dashboard() {
 
                 {/* Footer */}
                 <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3 text-xs text-zinc-500">
-                  <span>{latest ? relativeTime(latest.fetched_at) : 'sem dados'}</span>
+                  <span className="flex items-center gap-2">
+                    {latest ? relativeTime(latest.fetched_at) : 'sem dados'}
+                    {lastVolumeByAsset.get(asset.id) != null && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-200/60" title="Volume do último pregão">
+                        <BarChart3 className="h-2.5 w-2.5" />
+                        {formatVolumeBRL(lastVolumeByAsset.get(asset.id))}
+                      </span>
+                    )}
+                  </span>
                   {asset.unit && <span className="font-mono">{asset.unit}</span>}
                 </div>
               </Link>

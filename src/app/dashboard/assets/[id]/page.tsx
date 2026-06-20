@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
 import { Sparkline } from '@/components/ui/sparkline';
 import { PriceChart, type PricePoint } from '@/components/price-chart';
+import { LiquidityBlock } from '@/components/liquidity-block';
+import { CalendarSpreadBlock } from '@/components/calendar-spread-block';
 import { TestAssetButton } from '@/components/test-asset-button';
 import { ConvertedPrice } from '@/components/converted-price';
 import { createClient } from '@/lib/supabase/server';
@@ -28,10 +30,21 @@ export default async function AssetDetail({ params }: { params: { id: string } }
   if (!asset) notFound();
 
   const { data: quotes } = await supabase
-    .from('quotes').select('id, price, fetched_at, source, raw')
+    .from('quotes')
+    .select('id, price, fetched_at, source, raw, volume_brl, trades_count, open_interest, oscillation_pct, ohlc')
     .eq('asset_id', asset.id)
     .order('fetched_at', { ascending: false })
     .limit(1000);
+
+  // calendar spread (mais recente)
+  const { data: spread } = await supabase
+    .from('v_latest_calendar_spread')
+    .select('front_symbol, front_price, next_symbol, next_price, spread_value, spread_pct, computed_at')
+    .eq('asset_id', asset.id)
+    .maybeSingle();
+
+  // pega último quote com dados de liquidez (volume_brl não-nulo)
+  const lastLiquidityQuote = (quotes ?? []).find((q: any) => q.volume_brl != null);
 
   // série ascendente pro chart
   const chartData: PricePoint[] = (quotes ?? [])
@@ -152,6 +165,24 @@ export default async function AssetDetail({ params }: { params: { id: string } }
               <PriceChart data={chartData} unit={asset.unit} height={380} />
             </CardContent>
           </Card>
+
+          {/* Liquidez (só faz sentido pra futures com volume) */}
+          {asset.brapi_kind === 'futures' && lastLiquidityQuote && (
+            <LiquidityBlock
+              volumeBRL={lastLiquidityQuote.volume_brl}
+              trades={lastLiquidityQuote.trades_count}
+              openInterest={lastLiquidityQuote.open_interest}
+              oscillationPct={lastLiquidityQuote.oscillation_pct}
+              ohlc={lastLiquidityQuote.ohlc}
+              unit={asset.unit}
+              fetchedAt={lastLiquidityQuote.fetched_at}
+            />
+          )}
+
+          {/* Calendar spread */}
+          {asset.brapi_kind === 'futures' && spread && (
+            <CalendarSpreadBlock spread={spread} unit={asset.unit} />
+          )}
 
           {/* Em outras unidades */}
           {alternates.length > 0 && (
