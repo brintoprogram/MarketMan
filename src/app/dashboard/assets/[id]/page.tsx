@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
 import { Sparkline } from '@/components/ui/sparkline';
-import { PriceChart, type PricePoint } from '@/components/price-chart';
+import { PriceChart, type PricePoint, type CompareAsset } from '@/components/price-chart';
 import { LiquidityBlock } from '@/components/liquidity-block';
 import { CalendarSpreadBlock } from '@/components/calendar-spread-block';
 import { TestAssetButton } from '@/components/test-asset-button';
@@ -50,6 +50,34 @@ export default async function AssetDetail({ params }: { params: { id: string } }
   const chartData: PricePoint[] = (quotes ?? [])
     .map((q) => ({ time: Math.floor(new Date(q.fetched_at).getTime() / 1000), price: Number(q.price) }))
     .sort((a, b) => a.time - b.time);
+
+  // outros ativos pra dropdown de comparação
+  const { data: otherAssets } = await supabase
+    .from('assets')
+    .select('id, symbol, name, unit')
+    .eq('active', true)
+    .neq('id', asset.id)
+    .order('display_order');
+
+  const otherIds = (otherAssets ?? []).map((a) => a.id);
+  let compareAssets: CompareAsset[] = [];
+  if (otherIds.length) {
+    const { data: otherQuotes } = await supabase
+      .from('quotes')
+      .select('asset_id, price, fetched_at')
+      .in('asset_id', otherIds)
+      .order('fetched_at', { ascending: true });
+    const byAsset = new Map<string, PricePoint[]>();
+    for (const q of otherQuotes ?? []) {
+      const t = Math.floor(new Date(q.fetched_at).getTime() / 1000);
+      const arr = byAsset.get(q.asset_id) ?? [];
+      arr.push({ time: t, price: Number(q.price) });
+      byAsset.set(q.asset_id, arr);
+    }
+    compareAssets = (otherAssets ?? [])
+      .filter((a) => (byAsset.get(a.id)?.length ?? 0) > 5)
+      .map((a) => ({ id: a.id, symbol: a.symbol, name: a.name, unit: a.unit, data: byAsset.get(a.id) ?? [] }));
+  }
 
   const series = (quotes ?? []).map((q) => ({ price: Number(q.price), fetched_at: q.fetched_at, source: q.source }));
   const latest = series[0];
@@ -162,7 +190,7 @@ export default async function AssetDetail({ params }: { params: { id: string } }
           {/* Gráfico real (lightweight-charts) */}
           <Card className="shadow-lifted">
             <CardContent className="pt-6">
-              <PriceChart data={chartData} unit={asset.unit} height={380} />
+              <PriceChart data={chartData} unit={asset.unit} height={380} compareAssets={compareAssets} />
             </CardContent>
           </Card>
 
