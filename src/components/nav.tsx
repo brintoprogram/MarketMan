@@ -26,6 +26,7 @@ export async function AppNav() {
             <NavLink href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />}>Dashboard</NavLink>
             <NavLink href="/calculator" icon={<Calculator className="h-4 w-4" />}>Conversor</NavLink>
             <NavLink href="/alerts" icon={<Bell className="h-4 w-4" />}>Alertas</NavLink>
+            <NavLink href="/reports" icon={<CalendarClock className="h-4 w-4" />}>Relatórios</NavLink>
             <NavLink href="/settings" icon={<Settings className="h-4 w-4" />}>Configurações</NavLink>
           </div>
         </div>
