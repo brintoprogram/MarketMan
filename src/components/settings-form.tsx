@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Clock, Gauge, Check, AlertTriangle } from 'lucide-react';
+import { toast } from '@/components/ui/toast';
+import { Clock, Gauge, Power } from 'lucide-react';
 
 interface Props {
   initialCronMinutes: number;
@@ -16,213 +16,254 @@ interface Props {
   usage: { count: number; blocked: number; limit: number; enabled: boolean };
 }
 
-const PRESETS = [
-  { label: '5 minutos',     value: 5 },
-  { label: '10 minutos',    value: 10 },
-  { label: '15 minutos',    value: 15 },
-  { label: '30 minutos',    value: 30 },
-  { label: '1 hora',        value: 60 },
-  { label: '2 horas',       value: 120 },
-  { label: '6 horas',       value: 360 },
-  { label: '12 horas',      value: 720 },
-  { label: '1 vez ao dia (24h)', value: 1440 }
+const PRESETS: { label: string; sub: string; value: number }[] = [
+  { label: '5min',  sub: 'turbo',           value: 5 },
+  { label: '15min', sub: 'recomendado',     value: 15 },
+  { label: '30min', sub: '',                value: 30 },
+  { label: '1h',    sub: '',                value: 60 },
+  { label: '2h',    sub: '',                value: 120 },
+  { label: '6h',    sub: '',                value: 360 },
+  { label: '12h',   sub: '',                value: 720 },
+  { label: '24h',   sub: 'econômico',       value: 1440 }
 ];
+
+function describeNextCollection(minutes: number, now: Date = new Date()) {
+  // Próximo múltiplo de N minutos em horário UTC (cron roda em UTC).
+  // Pra UI mostramos em horário local do user.
+  const local = new Date(now);
+  const m = local.getMinutes();
+  const remainder = (minutes - (m % minutes)) % minutes || minutes;
+  const next = new Date(local.getTime() + remainder * 60 * 1000);
+  next.setSeconds(0, 0);
+  const hh = String(next.getHours()).padStart(2, '0');
+  const mm = String(next.getMinutes()).padStart(2, '0');
+  return { hh, mm, inMinutes: remainder };
+}
 
 export function SettingsForm({ initialCronMinutes, initialRateLimitEnabled, initialRateLimitDaily, usage }: Props) {
   const router = useRouter();
   const [cron, setCron] = useState(initialCronMinutes);
-  const [customCron, setCustomCron] = useState(false);
+  const [customCron, setCustomCron] = useState(!PRESETS.some((p) => p.value === initialCronMinutes));
   const [rateEnabled, setRateEnabled] = useState(initialRateLimitEnabled);
   const [rateLimit, setRateLimit] = useState(initialRateLimitDaily);
   const [savingCron, setSavingCron] = useState(false);
   const [savingRate, setSavingRate] = useState(false);
-  const [feedback, setFeedback] = useState<{ kind: 'ok'|'error'; msg: string } | null>(null);
+
+  const next = useMemo(() => describeNextCollection(cron), [cron]);
 
   const usagePct = usage.limit > 0 ? Math.min(100, (usage.count / usage.limit) * 100) : 0;
-  const usageColor = !usage.enabled ? 'bg-zinc-300'
-    : usagePct > 90 ? 'bg-rose-500'
-    : usagePct > 70 ? 'bg-amber-500'
-    : 'bg-brand-500';
+  const usageWarn = usage.enabled && usagePct > 90;
+  const usageCaut = usage.enabled && usagePct > 70 && !usageWarn;
+  const usageBarBg = !usage.enabled ? 'bg-line-strong'
+    : usageWarn ? 'bg-down'
+    : usageCaut ? 'bg-[#F59E0B]'
+    : 'bg-brand';
 
   async function saveCron() {
-    setSavingCron(true); setFeedback(null);
+    setSavingCron(true);
     const res = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'set_frequency', minutes: cron })
     });
     const data = await res.json();
     setSavingCron(false);
-    if (!res.ok) {
-      setFeedback({ kind: 'error', msg: data.error ?? 'Falha ao salvar' });
-      return;
-    }
-    setFeedback({ kind: 'ok', msg: `Frequência atualizada — cron: ${data.applied?.schedule}` });
+    if (!res.ok) { toast.error('Não consegui salvar', data?.error ?? 'Falha'); return; }
+    toast.success('Frequência atualizada', data.applied?.schedule ? `cron: ${data.applied.schedule}` : `${cron} min`);
     router.refresh();
   }
 
   async function saveRate() {
-    setSavingRate(true); setFeedback(null);
+    setSavingRate(true);
     const res = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'set_rate_limit', enabled: rateEnabled, limit: rateLimit })
     });
     const data = await res.json();
     setSavingRate(false);
-    if (!res.ok) {
-      setFeedback({ kind: 'error', msg: data.error ?? 'Falha ao salvar' });
-      return;
-    }
-    setFeedback({ kind: 'ok', msg: rateEnabled ? `Rate limit: ${rateLimit}/dia ativo` : 'Rate limit desligado' });
+    if (!res.ok) { toast.error('Não consegui salvar', data?.error ?? 'Falha'); return; }
+    toast.success(
+      rateEnabled ? `Rate limit: ${rateLimit}/dia ativo` : 'Rate limit desligado',
+      rateEnabled ? 'Quando bater, chamadas extras são bloqueadas e logadas.' : 'Sem teto de chamadas à brapi.'
+    );
     router.refresh();
   }
 
   return (
     <>
-      {/* Frequência */}
+      {/* ==================== FREQUÊNCIA ==================== */}
       <Card>
         <CardHeader>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+            Coleta
+          </div>
           <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-brand-600" />
+            <Clock className="h-4 w-4 text-brand-ink" />
             Frequência de coleta
           </CardTitle>
           <CardDescription>
-            De quanto em quanto tempo o pg_cron dispara o <code className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-xs">fetch-quotes</code>.
+            De quanto em quanto tempo o cron dispara o <code className="rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px] text-ink-2">fetch-quotes</code>.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Intervalo</Label>
-            <div className="flex gap-2">
-              <Select
-                value={customCron ? 'custom' : String(cron)}
-                onChange={(e) => {
-                  if (e.target.value === 'custom') setCustomCron(true);
-                  else { setCustomCron(false); setCron(Number(e.target.value)); }
-                }}
-                className="flex-1"
-              >
-                {PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-                <option value="custom">Customizado…</option>
-              </Select>
-              {customCron && (
-                <Input
-                  type="number"
-                  min={1}
-                  max={1440}
-                  value={cron}
-                  onChange={(e) => setCron(Number(e.target.value))}
-                  className="w-32"
-                  placeholder="minutos"
-                />
-              )}
-            </div>
-            <p className="text-xs text-zinc-500">
-              {cron < 60
-                ? `Cron: */${cron} * * * * (a cada ${cron} minutos)`
-                : (cron % 60 === 0
-                    ? `Cron: 0 */${cron/60} * * * (a cada ${cron/60} horas)`
-                    : `Cron: */${cron} * * * *`)}
-            </p>
+          {/* Presets segmented em grid */}
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
+            {PRESETS.map((p) => {
+              const active = !customCron && cron === p.value;
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => { setCustomCron(false); setCron(p.value); }}
+                  className={`flex flex-col items-center gap-0.5 rounded-md border px-2 py-2 transition ${
+                    active
+                      ? 'border-brand bg-brand-soft text-brand-ink shadow-card'
+                      : 'border-line bg-panel text-ink-2 hover:border-line-strong hover:bg-panel-2'
+                  }`}
+                >
+                  <span className={`num text-[12.5px] font-semibold ${active ? 'text-brand-ink' : 'text-ink'}`}>
+                    {p.label}
+                  </span>
+                  {p.sub && <span className="text-[9.5px] font-medium uppercase tracking-wider opacity-70">{p.sub}</span>}
+                </button>
+              );
+            })}
           </div>
+
+          {/* Custom */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCustomCron(true)}
+              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                customCron
+                  ? 'border-brand bg-brand-soft text-brand-ink'
+                  : 'border-line bg-panel text-ink-2 hover:border-line-strong hover:bg-panel-2'
+              }`}
+            >
+              Customizar
+            </button>
+            {customCron && (
+              <>
+                <Input
+                  type="number" min={1} max={1440}
+                  value={cron} onChange={(e) => setCron(Number(e.target.value))}
+                  className="num w-24"
+                />
+                <span className="text-[12px] text-ink-2">minutos</span>
+              </>
+            )}
+          </div>
+
+          {/* Próxima coleta */}
+          <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-line bg-panel-2 px-3 py-2.5">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">Próxima coleta</div>
+              <div className="num mt-0.5 text-[15px] font-medium text-ink">
+                ~{next.inMinutes}min · {next.hh}:{next.mm}
+              </div>
+            </div>
+            <span className="num text-[11px] text-ink-3">
+              cron: {cron < 60 ? `*/${cron} * * * *` : cron % 60 === 0 ? `0 */${cron/60} * * *` : `*/${cron} * * * *`}
+            </span>
+          </div>
+
           <div className="flex justify-end">
-            <Button onClick={saveCron} disabled={savingCron} variant="brand">
-              {savingCron ? 'Aplicando...' : 'Aplicar frequência'}
+            <Button onClick={saveCron} disabled={savingCron} variant="brand" size="sm">
+              {savingCron ? 'Aplicando…' : 'Aplicar frequência'}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Rate limit */}
+      {/* ==================== RATE LIMIT ==================== */}
       <Card>
         <CardHeader>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+            Provedor
+          </div>
           <CardTitle className="flex items-center gap-2">
-            <Gauge className="h-5 w-5 text-brand-600" />
+            <Gauge className="h-4 w-4 text-brand-ink" />
             Rate limit da brapi
           </CardTitle>
           <CardDescription>
             Quantas chamadas à brapi por dia são permitidas. Cada ativo coletado conta como 1.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Uso atual */}
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
+        <CardContent className="space-y-4">
+          {/* Barra de uso */}
+          <div className="rounded-md border border-line bg-panel-2 p-3.5">
             <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Uso hoje</span>
-              <span className="font-mono text-sm">
-                <strong className="text-zinc-900">{usage.count}</strong>
-                <span className="text-zinc-500"> / {usage.enabled ? usage.limit : '∞'}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">Uso hoje</span>
+              <span className="num text-[13px]">
+                <strong className="text-ink">{usage.count}</strong>
+                <span className="text-ink-3"> / {usage.enabled ? usage.limit : '∞'}</span>
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
-              <div className={`h-full transition-all duration-500 ${usageColor}`} style={{ width: `${usagePct}%` }} />
+            <div className="relative h-1.5 overflow-hidden rounded-full bg-line">
+              <div
+                className={`h-full transition-all duration-500 ${usageBarBg}`}
+                style={{ width: `${usagePct}%` }}
+              />
             </div>
-            {usage.blocked > 0 && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-rose-600">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {usage.blocked} requisição{usage.blocked === 1 ? '' : 'ões'} bloqueada{usage.blocked === 1 ? '' : 's'} hoje
-              </div>
-            )}
+            <div className="mt-2 flex items-center justify-between">
+              <span className="num text-[10.5px] text-ink-3">
+                {usage.enabled ? `${usagePct.toFixed(0)}% do teto` : 'sem teto ativo'}
+              </span>
+              {usage.blocked > 0 && (
+                <span className="num text-[10.5px] font-medium text-down">
+                  {usage.blocked} bloqueio{usage.blocked === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Toggle */}
-          <div className="flex items-center justify-between rounded-xl border border-zinc-200 p-4">
-            <div>
-              <Label htmlFor="rate-enabled">Rate limit ativo</Label>
-              <p className="mt-1 text-xs text-zinc-500">
-                Quando desligado, qualquer número de chamadas é permitido.
-              </p>
+          <div className="flex items-center justify-between rounded-md border border-line p-3">
+            <div className="flex items-start gap-2.5">
+              <Power className="mt-0.5 h-3.5 w-3.5 text-brand-ink" />
+              <div>
+                <div className="text-[12.5px] font-semibold text-ink">Rate limit ligado</div>
+                <div className="mt-0.5 text-[11px] text-ink-2">Desligado = qualquer volume passa.</div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setRateEnabled(!rateEnabled)}
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${rateEnabled ? 'bg-brand-500' : 'bg-zinc-300'}`}
-            >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${rateEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+            <Toggle value={rateEnabled} onChange={setRateEnabled} />
           </div>
 
           {/* Limit */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="rate-limit">Limite diário</Label>
             <Input
               id="rate-limit"
-              type="number"
-              min={0}
-              max={100000}
-              value={rateLimit}
-              onChange={(e) => setRateLimit(Number(e.target.value))}
+              type="number" min={0} max={100000}
+              value={rateLimit} onChange={(e) => setRateLimit(Number(e.target.value))}
               disabled={!rateEnabled}
-              className="font-mono text-lg"
+              className="num"
             />
-            <p className="text-xs text-zinc-500">
-              Default sugerido: <strong>1.000</strong>. Cron a cada 15min com 7 ativos = ~672/dia.
+            <p className="text-[11px] text-ink-3">
+              Sugestão: <span className="num font-medium text-ink-2">1.000</span>. Cron 15min × 7 ativos ≈ <span className="num">672/dia</span>.
             </p>
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={saveRate} disabled={savingRate} variant="brand">
-              {savingRate ? 'Aplicando...' : 'Aplicar rate limit'}
+            <Button onClick={saveRate} disabled={savingRate} variant="brand" size="sm">
+              {savingRate ? 'Aplicando…' : 'Aplicar rate limit'}
             </Button>
           </div>
         </CardContent>
       </Card>
-
-      {feedback && (
-        <div className={`rounded-xl border px-4 py-3 text-sm shadow-soft ${
-          feedback.kind === 'ok'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-            : 'border-rose-200 bg-rose-50 text-rose-900'
-        }`}>
-          <div className="flex items-center gap-2">
-            {feedback.kind === 'ok' ? <Check className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-            <span>{feedback.msg}</span>
-          </div>
-        </div>
-      )}
     </>
+  );
+}
+
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${value ? 'bg-brand' : 'bg-line-strong'}`}
+      aria-pressed={value}
+    >
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition ${value ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+    </button>
   );
 }

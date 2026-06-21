@@ -5,8 +5,7 @@ import { SettingsForm } from '@/components/settings-form';
 import { QuietHoursForm } from '@/components/quiet-hours-form';
 import { DailyLimitForm } from '@/components/daily-limit-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Activity, AlertTriangle, Info, Clock, Gauge } from 'lucide-react';
+import { Activity, Info, ArrowRight } from 'lucide-react';
 import { relativeTime } from '@/lib/format';
 import Link from 'next/link';
 
@@ -27,38 +26,45 @@ export default async function Settings() {
 
   const { data: recentLogs } = await supabase
     .from('system_logs')
-    .select('id, level, source, event, error_message, created_at, metadata')
+    .select('id, level, source, event, error_message, created_at')
     .order('created_at', { ascending: false })
-    .limit(30);
+    .limit(8);
 
-  const errorCount = (recentLogs ?? []).filter((l) => l.level === 'error').length;
-  const warnCount = (recentLogs ?? []).filter((l) => l.level === 'warn').length;
+  const [{ count: errorCount }, { count: warnCount }, { count: infoCount }] = await Promise.all([
+    supabase.from('system_logs').select('*', { count: 'exact', head: true }).eq('level', 'error'),
+    supabase.from('system_logs').select('*', { count: 'exact', head: true }).eq('level', 'warn'),
+    supabase.from('system_logs').select('*', { count: 'exact', head: true }).eq('level', 'info')
+  ]);
+
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('quiet_hours_start, quiet_hours_end, daily_message_limit')
+    .eq('id', user.id).single();
+
+  const { data: usageRpc } = await supabase.rpc('count_user_messages_24h', { p_user_id: user.id });
+  const userTodayCount = typeof usageRpc === 'number' ? usageRpc : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-mesh">
+    <div className="min-h-screen bg-bg">
       <AppNav />
-      <section className="relative border-b border-zinc-200/60">
-        <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />
-        <div className="relative mx-auto max-w-5xl px-6 py-10">
+
+      <section className="border-b border-line">
+        <div className="mx-auto max-w-5xl px-5 py-8">
           <div className="animate-fade-up">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-600">Sistema</div>
-            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">Configurações</h1>
-            <p className="mt-1 text-sm text-zinc-500">Frequência de coleta, rate limit, observabilidade.</p>
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+              Sistema
+            </div>
+            <h1 className="text-[32px] font-bold leading-none tracking-[-0.03em] text-ink sm:text-[36px]">
+              Configurações
+            </h1>
+            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-ink-2">
+              Frequência de coleta, rate limit, janela de silêncio, anti-spam e observabilidade.
+            </p>
           </div>
         </div>
       </section>
 
-      <main className="mx-auto max-w-5xl space-y-8 px-6 py-10">
-        {await (async () => {
-          const { data: prof } = await supabase.from('profiles').select('quiet_hours_start, quiet_hours_end, daily_message_limit').eq('id', user.id).single();
-          const { data: usage } = await supabase.rpc('count_user_messages_24h', { p_user_id: user.id });
-          return (
-            <>
-              <QuietHoursForm initialStart={prof?.quiet_hours_start ?? null} initialEnd={prof?.quiet_hours_end ?? null} />
-              <DailyLimitForm initialLimit={prof?.daily_message_limit ?? null} todayCount={typeof usage === 'number' ? usage : 0} />
-            </>
-          );
-        })()}
+      <main className="mx-auto max-w-5xl space-y-5 px-5 py-8">
         <SettingsForm
           initialCronMinutes={cron?.minutes ?? 15}
           initialRateLimitEnabled={rate?.enabled ?? true}
@@ -71,78 +77,99 @@ export default async function Settings() {
           }}
         />
 
-        {/* Logs recentes */}
+        <QuietHoursForm
+          initialStart={prof?.quiet_hours_start ?? null}
+          initialEnd={prof?.quiet_hours_end ?? null}
+        />
+
+        <DailyLimitForm
+          initialLimit={prof?.daily_message_limit ?? null}
+          todayCount={userTodayCount}
+        />
+
+        {/* Logs recentes — mini-tabela */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+                  Observabilidade
+                </div>
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-brand-600" />
-                  Logs do sistema
+                  <Activity className="h-4 w-4 text-brand-ink" />
+                  Logs recentes
                 </CardTitle>
-                <CardDescription>Últimos 30 eventos de TODAS as fontes.</CardDescription>
+                <CardDescription>Últimos 8 eventos. Para tabela completa, abra a observabilidade.</CardDescription>
               </div>
-              <div className="flex gap-2">
-                {errorCount > 0 && <Badge variant="danger">{errorCount} erros</Badge>}
-                {warnCount > 0 && <Badge variant="commodity">{warnCount} avisos</Badge>}
+              <div className="flex flex-shrink-0 items-center gap-1.5 text-[11px]">
+                {(errorCount ?? 0) > 0 && <CountPill color="down">{errorCount}</CountPill>}
+                {(warnCount ?? 0) > 0 && <CountPill color="amber">{warnCount}</CountPill>}
+                {(infoCount ?? 0) > 0 && <CountPill color="brand">{infoCount}</CountPill>}
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-1">
-            {(recentLogs ?? []).length === 0 ? (
-              <p className="py-8 text-center text-sm text-zinc-500">Nenhum log ainda.</p>
-            ) : (
-              <ul className="divide-y divide-zinc-100">
-                {(recentLogs ?? []).map((l) => (
-                  <li key={l.id} className="flex items-start gap-3 py-2.5">
-                    <span className={`mt-1.5 inline-flex h-2 w-2 flex-shrink-0 rounded-full ${
-                      l.level === 'error' ? 'bg-rose-500' :
-                      l.level === 'warn' ? 'bg-amber-500' :
-                      l.level === 'info' ? 'bg-brand-500' : 'bg-zinc-300'
-                    }`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="font-semibold text-zinc-900">{l.event}</span>
-                        <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600">{l.source}</code>
-                        <span className="text-zinc-400">{relativeTime(l.created_at)}</span>
-                      </div>
+          <CardContent className="p-0">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-line text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">
+                  <th className="py-2 pl-5 pr-2 font-semibold">Nível</th>
+                  <th className="px-2 py-2 font-semibold">Evento</th>
+                  <th className="px-2 py-2 font-semibold">Fonte</th>
+                  <th className="py-2 pl-2 pr-5 text-right font-semibold">Quando</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(recentLogs ?? []).length === 0 && (
+                  <tr><td colSpan={4} className="py-10 text-center text-[12px] text-ink-3">Sem eventos ainda.</td></tr>
+                )}
+                {(recentLogs ?? []).map((l, i) => (
+                  <tr key={l.id} className={`border-b border-line/60 ${i % 2 === 1 ? 'bg-panel-2/40' : ''}`}>
+                    <td className="py-2 pl-5 pr-2">
+                      <LevelDot level={l.level} />
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="text-[12px] font-medium text-ink">{l.event}</div>
                       {l.error_message && (
-                        <p className="mt-0.5 truncate text-xs text-rose-600">{l.error_message}</p>
+                        <div className="num truncate text-[10px] text-down" title={l.error_message}>{l.error_message}</div>
                       )}
-                      {l.metadata && Object.keys(l.metadata).length > 0 && (
-                        <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">
-                          {JSON.stringify(l.metadata)}
-                        </p>
-                      )}
-                    </div>
-                  </li>
+                    </td>
+                    <td className="px-2 py-2">
+                      <code className="num rounded bg-panel-2 px-1.5 py-0.5 text-[10px] text-ink-2">{l.source}</code>
+                    </td>
+                    <td className="py-2 pl-2 pr-5 text-right">
+                      <span className="num text-[11px] text-ink-3">{relativeTime(l.created_at)}</span>
+                    </td>
+                  </tr>
                 ))}
-              </ul>
-            )}
-            <div className="mt-4 border-t border-zinc-100 pt-3 text-center">
-              <Link href="/settings/logs" className="text-xs font-medium text-brand-700 hover:underline">
-                Ver todos os logs →
+              </tbody>
+            </table>
+            <div className="flex items-center justify-end border-t border-line bg-panel-2/40 px-5 py-2.5">
+              <Link href="/settings/logs" className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-ink hover:underline">
+                Ver todos os logs <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
           </CardContent>
         </Card>
 
-        {/* Info do projeto */}
+        {/* Sobre o sistema */}
         <Card>
           <CardHeader>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+              Infra
+            </div>
             <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5 text-brand-600" />
-              Sobre os dados
+              <Info className="h-4 w-4 text-brand-ink" />
+              Sobre o sistema
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-zinc-700">
-            <Row label="Fonte de cotações" value="brapi.dev (PRO)" />
-            <Row label="WhatsApp gateway" value="Z-API" />
-            <Row label="Banco de dados" value="Postgres (Supabase, sa-east-1)" />
-            <Row label="Coleta" value={`Cron pg_cron a cada ${cron?.minutes ?? 15} minutos`} />
-            <Row label="Rate limit" value={rate?.enabled ? `${rate.limit}/dia (ativo)` : 'desligado'} />
-            <Row label="Retry" value="backoff exponencial 1m → 5m → 30m → 2h → 6h (máx 5)" />
-            <Row label="Webhook on-status" value="/api/whatsapp-status (configurar no painel Z-API)" />
+          <CardContent className="space-y-2.5">
+            <KV label="Fonte de cotações" value="brapi.dev (PRO)" />
+            <KV label="WhatsApp gateway" value="Z-API" />
+            <KV label="Banco de dados" value="Postgres · Supabase · sa-east-1" />
+            <KV label="Frequência de coleta" value={`${cron?.minutes ?? 15} min`} />
+            <KV label="Rate limit" value={rate?.enabled ? `${rate.limit}/dia ativo` : 'desligado'} />
+            <KV label="Retry" value="backoff 1m → 5m → 30m → 2h → 6h (máx 5)" />
+            <KV label="Webhook on-status" value="/api/whatsapp-status (configurar no painel Z-API)" />
           </CardContent>
         </Card>
       </main>
@@ -150,11 +177,37 @@ export default async function Settings() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function CountPill({ color, children }: { color: 'down' | 'amber' | 'brand'; children: React.ReactNode }) {
+  const cls =
+    color === 'down'  ? 'bg-down-soft text-down'
+    : color === 'amber' ? 'bg-[#F59E0B]/15 text-[#B45309]'
+    : 'bg-brand-soft text-brand-ink';
   return (
-    <div className="flex items-baseline justify-between border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
-      <span className="text-zinc-500">{label}</span>
-      <span className="font-mono text-xs text-zinc-900">{value}</span>
+    <span className={`num inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${cls}`}>
+      {children}
+    </span>
+  );
+}
+
+function LevelDot({ level }: { level: string }) {
+  const dot =
+    level === 'error' ? 'bg-down'
+    : level === 'warn' ? 'bg-[#F59E0B]'
+    : level === 'info' ? 'bg-brand'
+    : 'bg-line-strong';
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">{level}</span>
+    </span>
+  );
+}
+
+function KV({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between border-b border-line pb-2 last:border-0 last:pb-0">
+      <span className="text-[11.5px] text-ink-2">{label}</span>
+      <span className="num text-[11.5px] text-ink">{value}</span>
     </div>
   );
 }
