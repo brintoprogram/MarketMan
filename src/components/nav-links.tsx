@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { LayoutDashboard, Bell, CalendarClock, Users, MessageCircle, Sparkles, Calculator, Settings, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Bell, CalendarClock, Users, MessageCircle, Sparkles, Calculator, Settings, BookOpen, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const LINKS = [
@@ -14,6 +14,7 @@ const LINKS = [
   { href: '/messages',     icon: MessageCircle,   label: 'Mensagens' },
   { href: '/templates',    icon: Sparkles,        label: 'Templates' },
   { href: '/calculator',   icon: Calculator,      label: 'Conversor' },
+  { href: '/tutorial',     icon: BookOpen,        label: 'Guia' },
   { href: '/settings',     icon: Settings,        label: 'Configurações' }
 ];
 
