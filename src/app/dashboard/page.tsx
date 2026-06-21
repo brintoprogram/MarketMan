@@ -8,6 +8,7 @@ import { StatTile } from '@/components/stat-tile';
 import { AssetCard, AssetCardEmpty, type AssetCardData } from '@/components/asset-card';
 import { AssetGridWithFilter } from '@/components/asset-grid-with-filter';
 import { NextCollectionTicker } from '@/components/next-collection-ticker';
+import { DashboardCustomizer } from '@/components/dashboard-customizer';
 import { createClient } from '@/lib/supabase/server';
 import { Plus, Activity, Bell, RefreshCw, ArrowUpRight, Clock } from 'lucide-react';
 
@@ -101,6 +102,16 @@ export default async function Dashboard() {
     };
   });
 
+  // Aplica personalização: filtra + reordena baseado em dashboard_asset_ids
+  const customIds = ((profile?.dashboard_asset_ids ?? []) as string[]).filter(Boolean);
+  let visibleCards = cardData;
+  if (customIds.length > 0) {
+    const byId = new Map(cardData.map((c) => [c.id, c]));
+    visibleCards = customIds
+      .map((id) => byId.get(id))
+      .filter((c): c is AssetCardData => !!c);
+  }
+
   const firstName = (profile?.full_name?.split(' ')[0]) ?? 'investidor';
 
   return (
@@ -123,7 +134,13 @@ export default async function Dashboard() {
                   <NextCollectionTicker intervalMinutes={cronMinutes} lastFetchedAt={lastFetch} />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <DashboardCustomizer
+                  allAssets={(assets ?? []).map((a) => ({
+                    id: a.id, symbol: a.symbol, name: a.name, category: a.category, unit: a.unit
+                  }))}
+                  initialSelection={customIds}
+                />
                 <RefreshButton showBackfill={!hasEnoughHistory} />
                 <Link href="/alerts/new">
                   <Button variant="brand" size="sm">
@@ -205,7 +222,7 @@ export default async function Dashboard() {
         )}
 
         {/* Acompanhamento + filtro segmentado + grid */}
-        <AssetGridWithFilter cards={cardData} />
+        <AssetGridWithFilter cards={visibleCards} />
       </main>
     </div>
   );
