@@ -5,64 +5,72 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from '@/components/ui/toast';
 import { Logo } from '@/components/logo';
-import { Zap, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Mail } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError(null);
     const supabase = createClient();
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
     });
-    if (err) setError(err.message);
-    else setSent(true);
     setLoading(false);
+    if (err) { toast.error('Não consegui enviar', err.message); return; }
+    setSent(true);
+    toast.success('Link enviado', `Cheque ${email} (e a pasta de spam).`);
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-mesh px-6 py-12">
-      <div className="absolute inset-0 bg-grid pointer-events-none" />
-      <div className="absolute inset-0 bg-radial-fade pointer-events-none" />
-      <div className="relative w-full max-w-md animate-fade-up">
+    <main className="relative flex min-h-screen items-center justify-center bg-bg px-5 py-12">
+      <div className="w-full max-w-[400px]">
         <Link href="/" className="mb-8 flex items-center justify-center transition-opacity hover:opacity-80">
           <Logo size="md" />
         </Link>
-        <Card className="shadow-elevated">
-          <CardHeader>
-            <CardTitle>{sent ? 'Verifique seu email' : 'Entrar'}</CardTitle>
-            <CardDescription>
-              {sent
-                ? 'Enviamos um link mágico no seu email. Abre lá pra continuar.'
-                : 'Sem senha. Te mandamos um link de acesso direto.'}
-            </CardDescription>
-          </CardHeader>
+
+        <div className="rounded-xl border border-line bg-panel p-6 shadow-card animate-fade-up">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+            Acesso
+          </div>
+          <h1 className="mt-1.5 text-[22px] font-bold leading-tight tracking-[-0.02em] text-ink">
+            {sent ? 'Verifique seu email' : 'Entrar'}
+          </h1>
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2">
+            {sent
+              ? 'Enviamos um link mágico no seu email. Abre lá pra continuar.'
+              : 'Sem senha. Te mandamos um link de acesso direto.'}
+          </p>
+
           {!sent ? (
-            <CardContent>
+            <div className="mt-5 space-y-4">
               <Link href="/api/demo">
-                <Button type="button" variant="brand" className="mb-4 w-full" size="lg">
-                  <Zap className="h-4 w-4" />
+                <Button type="button" variant="brand" className="w-full" size="default">
                   Entrar como demo (sem email)
                 </Button>
               </Link>
-              <div className="relative mb-4">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200" /></div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-white px-2 font-medium text-zinc-400">ou com email</span>
+
+              {/* divisória "ou" */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-line" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-panel px-2 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink-3">
+                    ou
+                  </span>
                 </div>
               </div>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
+
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
@@ -74,29 +82,28 @@ export default function LoginPage() {
                     autoComplete="email"
                   />
                 </div>
-                {error && (
-                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                    {error}
-                  </p>
-                )}
-                <Button type="submit" variant="default" className="w-full" disabled={loading} size="lg">
-                  {loading ? 'Enviando...' : 'Receber link de acesso'}
+                <Button type="submit" variant="outline" className="w-full" disabled={loading || !email}>
+                  <Mail className="h-3.5 w-3.5" />
+                  {loading ? 'Enviando…' : 'Enviar magic link'}
                 </Button>
               </form>
-            </CardContent>
+            </div>
           ) : (
-            <CardContent>
-              <div className="flex items-start gap-3 rounded-xl border border-emerald-200/60 bg-emerald-50/60 p-4">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
-                <div className="text-sm">
-                  <p className="font-semibold text-emerald-900">Link enviado pra {email}</p>
-                  <p className="mt-1 text-emerald-800">Cheque sua caixa de entrada (e spam) e clica no link pra entrar.</p>
-                </div>
+            <div className="mt-5 flex items-start gap-2.5 rounded-md border border-line bg-panel-2 p-3.5">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-up" />
+              <div className="text-[12.5px]">
+                <p className="font-semibold text-ink">
+                  Link enviado pra <span className="num">{email}</span>
+                </p>
+                <p className="mt-1 leading-relaxed text-ink-2">
+                  Cheque sua caixa de entrada (e spam). O link expira em 1 hora.
+                </p>
               </div>
-            </CardContent>
+            </div>
           )}
-        </Card>
-        <p className="mt-6 text-center text-xs text-zinc-500">
+        </div>
+
+        <p className="mt-5 text-center text-[11px] text-ink-3">
           Ao continuar você concorda em receber notificações no WhatsApp.
         </p>
       </div>
