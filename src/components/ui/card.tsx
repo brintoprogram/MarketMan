@@ -1,12 +1,18 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Quando true, aplica hover translateY(-3px) + border-color escurece (use em cards clicáveis). */
+  interactive?: boolean;
+}
+
+export const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, interactive, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-soft',
+        'relative overflow-hidden rounded-xl border border-line bg-panel text-ink shadow-card',
+        interactive && 'card-hover cursor-pointer',
         className
       )}
       {...props}
@@ -16,17 +22,27 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
 Card.displayName = 'Card';
 
 export const CardHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />
+  <div className={cn('flex flex-col gap-1.5 p-5', className)} {...props} />
 );
+
 export const CardTitle = ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-  <h3 className={cn('text-lg font-semibold leading-none tracking-tight text-zinc-900', className)} {...props} />
+  <h3
+    className={cn(
+      'text-[15px] font-semibold leading-none tracking-tight text-ink',
+      className
+    )}
+    {...props}
+  />
 );
+
 export const CardDescription = ({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
-  <p className={cn('text-sm leading-relaxed text-zinc-500', className)} {...props} />
+  <p className={cn('text-[12.5px] leading-relaxed text-ink-3', className)} {...props} />
 );
+
 export const CardContent = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('p-6 pt-0', className)} {...props} />
+  <div className={cn('p-5 pt-0', className)} {...props} />
 );
+
 export const CardFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex items-center p-6 pt-0', className)} {...props} />
+  <div className={cn('flex items-center border-t border-line p-5', className)} {...props} />
 );

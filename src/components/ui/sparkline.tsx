@@ -1,3 +1,5 @@
+import { Skeleton } from '@/components/ui/skeleton';
+
 interface SparklineProps {
   points: number[];
   positive?: boolean;
@@ -6,9 +8,21 @@ interface SparklineProps {
   className?: string;
 }
 
-export function Sparkline({ points, positive = true, height = 36, width = 120, className }: SparklineProps) {
+export function Sparkline({
+  points,
+  positive = true,
+  height = 44,
+  width = 116,
+  className
+}: SparklineProps) {
+  // Brief: empty = não renderiza linha; mostra barra shimmer.
   if (!points || points.length < 2) {
-    return <div style={{ height, width }} className={className} />;
+    return (
+      <Skeleton
+        style={{ height: 28, width }}
+        className={className}
+      />
+    );
   }
 
   const min = Math.min(...points);
@@ -22,24 +36,45 @@ export function Sparkline({ points, positive = true, height = 36, width = 120, c
     return [x, y] as const;
   });
 
-  const linePath = coords.map(([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)).join(' ');
+  const linePath = coords
+    .map(([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`))
+    .join(' ');
   const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
 
-  const stroke = positive ? '#059669' : '#e11d48';
-  const fillStart = positive ? 'rgba(16,185,129,0.20)' : 'rgba(244,63,94,0.20)';
-  const fillEnd = positive ? 'rgba(16,185,129,0.00)' : 'rgba(244,63,94,0.00)';
-  const gradId = `spark-${positive ? 'pos' : 'neg'}-${Math.random().toString(36).slice(2, 7)}`;
+  // Cor por direção (semântica)
+  const stroke = positive ? 'var(--up)' : 'var(--down)';
+  // Gradient mesma cor, opacity 0.18 → 0
+  const fillTop = positive
+    ? 'rgba(5, 150, 105, 0.18)'
+    : 'rgba(225, 29, 72, 0.18)';
+  const fillBottom = positive
+    ? 'rgba(5, 150, 105, 0)'
+    : 'rgba(225, 29, 72, 0)';
+  const gradId = `spark-${positive ? 'up' : 'down'}-${Math.random().toString(36).slice(2, 7)}`;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className}>
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className={className}
+    >
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={fillStart} />
-          <stop offset="100%" stopColor={fillEnd} />
+          <stop offset="0%" stopColor={fillTop} />
+          <stop offset="100%" stopColor={fillBottom} />
         </linearGradient>
       </defs>
       <path d={areaPath} fill={`url(#${gradId})`} />
-      <path d={linePath} fill="none" stroke={stroke} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={linePath}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

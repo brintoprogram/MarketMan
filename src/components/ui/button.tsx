@@ -3,28 +3,36 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+  // base: tipografia, foco visível, transição contida, sem bounce
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-[13.5px] font-medium tracking-tight transition-[background,border-color,box-shadow,transform,filter] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:pointer-events-none disabled:opacity-50 active:translate-y-[1px]',
   {
     variants: {
       variant: {
-        default:
-          'bg-zinc-900 text-white shadow-soft hover:bg-zinc-800 hover:shadow-lifted',
+        // CTA primário: verde brand com sombra colorida discreta
         brand:
-          'bg-gradient-brand text-white shadow-[0_4px_12px_-2px_rgb(16_185_129/0.35)] hover:shadow-glow-brand hover:brightness-110',
+          'bg-brand text-white shadow-[0_2px_10px_rgba(16,185,129,0.32)] hover:brightness-110',
+        // CTA escuro (alternativa neutra ao brand)
+        default:
+          'bg-ink text-bg shadow-card hover:opacity-90',
+        // Mais comum: superfície + hairline + sombra leve
         outline:
-          'border border-zinc-200 bg-white text-zinc-900 shadow-soft hover:border-zinc-300 hover:shadow-lifted hover:bg-zinc-50',
+          'bg-panel text-ink border border-line-strong shadow-card hover:bg-brand-soft hover:border-brand hover:text-brand-ink',
+        // Ghost: transparente, hover em brand-soft
         ghost:
-          'text-zinc-700 hover:bg-zinc-100',
+          'text-ink-2 hover:bg-brand-soft hover:text-brand-ink',
+        // Erro
         destructive:
-          'bg-rose-600 text-white shadow-soft hover:bg-rose-700 hover:shadow-lifted',
+          'bg-down text-white shadow-[0_2px_10px_rgba(225,29,72,0.28)] hover:brightness-110',
+        // Link puro
         link:
-          'text-brand-700 underline-offset-4 hover:underline'
+          'text-brand-ink underline-offset-4 hover:underline px-0'
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3 text-xs',
-        lg: 'h-12 px-7 text-base',
-        icon: 'h-10 w-10'
+        // Brief: 42 default, 34 sm
+        default: 'h-[42px] px-4',
+        sm:      'h-[34px] px-3 text-[12px]',
+        lg:      'h-12 px-6 text-[14px]',
+        icon:    'h-9 w-9'
       }
     },
     defaultVariants: { variant: 'default', size: 'default' }

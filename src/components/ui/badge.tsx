@@ -2,39 +2,74 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
+/**
+ * Badge demovida: virou ponto colorido 7px + texto pequeno em ink-2.
+ * Sem pill gritante. Em casos especiais (status), aceita variant.
+ */
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset',
+  'inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-2 leading-none',
   {
     variants: {
       variant: {
-        commodity: 'bg-amber-50 text-amber-800 ring-amber-200/60',
-        currency:  'bg-sky-50 text-sky-800 ring-sky-200/60',
-        stock:     'bg-violet-50 text-violet-800 ring-violet-200/60',
-        crypto:    'bg-fuchsia-50 text-fuchsia-800 ring-fuchsia-200/60',
-        index:     'bg-zinc-100 text-zinc-700 ring-zinc-200/60',
-        brand:     'bg-brand-50 text-brand-800 ring-brand-200/60',
-        muted:     'bg-zinc-100 text-zinc-600 ring-zinc-200/60',
-        success:   'bg-emerald-50 text-emerald-700 ring-emerald-200/60',
-        danger:    'bg-rose-50 text-rose-700 ring-rose-200/60'
+        // Categorias de ativo — apenas ponto colorido + texto
+        commodity: '',
+        currency:  '',
+        stock:     '',
+        index:     '',
+        crypto:    '',
+        // Status semânticos — texto colorido (sem pill gritante)
+        brand:     'text-brand-ink',
+        success:   'text-up',
+        danger:    'text-down',
+        muted:     'text-ink-3'
       }
     },
     defaultVariants: { variant: 'muted' }
   }
 );
 
+const dotColor: Record<NonNullable<BadgeProps['variant']>, string> = {
+  commodity: '#F59E0B',
+  currency:  '#0EA5E9',
+  stock:     '#8B5CF6',
+  index:     '#8B5CF6',
+  crypto:    '#D946EF',
+  brand:     'var(--brand)',
+  success:   'var(--up)',
+  danger:    'var(--down)',
+  muted:     'var(--ink-3)'
+};
+
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof badgeVariants> {}
-
-export function Badge({ className, variant, ...props }: BadgeProps) {
-  return <span className={cn(badgeVariants({ variant, className }))} {...props} />;
+    VariantProps<typeof badgeVariants> {
+  /** Esconde o ponto colorido (deixa só o texto). */
+  noDot?: boolean;
 }
 
+export function Badge({ className, variant, noDot, children, ...props }: BadgeProps) {
+  const v = (variant ?? 'muted') as NonNullable<BadgeProps['variant']>;
+  return (
+    <span className={cn(badgeVariants({ variant: v, className }))} {...props}>
+      {!noDot && (
+        <span
+          aria-hidden
+          className="inline-block h-[7px] w-[7px] flex-shrink-0 rounded-full"
+          style={{ background: dotColor[v] }}
+        />
+      )}
+      {children}
+    </span>
+  );
+}
+
+// Helpers legados — mantidos pra retrocompatibilidade com chamadas existentes
 export function categoryVariant(category: string): NonNullable<BadgeProps['variant']> {
   if (category === 'commodity') return 'commodity';
   if (category === 'currency') return 'currency';
   if (category === 'stock') return 'stock';
   if (category === 'crypto') return 'crypto';
+  if (category === 'index') return 'index';
   return 'muted';
 }
 
