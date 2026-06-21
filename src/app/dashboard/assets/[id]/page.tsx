@@ -3,17 +3,22 @@ import Link from 'next/link';
 import { AppNav } from '@/components/nav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
-import { Sparkline } from '@/components/ui/sparkline';
 import { PriceChart, type PricePoint, type CompareAsset } from '@/components/price-chart';
 import { LiquidityBlock } from '@/components/liquidity-block';
 import { CalendarSpreadBlock } from '@/components/calendar-spread-block';
 import { TestAssetButton } from '@/components/test-asset-button';
 import { ConvertedPrice } from '@/components/converted-price';
+import { DataSourceTimeline } from '@/components/data-source-timeline';
+import { QuotesTable } from '@/components/quotes-table';
+import { EventsTimeline } from '@/components/events-timeline';
 import { createClient } from '@/lib/supabase/server';
-import { formatPrice, formatPct, pctClass, relativeTime } from '@/lib/format';
+import { formatPrice, formatPct, relativeTime } from '@/lib/format';
 import { getAlternateUnits } from '@/lib/conversions';
-import { ArrowLeft, Plus, ExternalLink, Database, Activity, AlertCircle, AlertTriangle, Info, CheckCircle, Repeat, Calculator } from 'lucide-react';
+import {
+  ArrowLeft, Plus, TrendingUp, TrendingDown, History, Database,
+  Bell, Activity, Repeat, Calculator
+} from 'lucide-react';
+import { CATEGORY_DOT } from '@/components/asset-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,22 +41,18 @@ export default async function AssetDetail({ params }: { params: { id: string } }
     .order('fetched_at', { ascending: false })
     .limit(1000);
 
-  // calendar spread (mais recente)
   const { data: spread } = await supabase
     .from('v_latest_calendar_spread')
     .select('front_symbol, front_price, next_symbol, next_price, spread_value, spread_pct, computed_at')
     .eq('asset_id', asset.id)
     .maybeSingle();
 
-  // pega último quote com dados de liquidez (volume_brl não-nulo)
   const lastLiquidityQuote = (quotes ?? []).find((q: any) => q.volume_brl != null);
 
-  // série ascendente pro chart
   const chartData: PricePoint[] = (quotes ?? [])
     .map((q) => ({ time: Math.floor(new Date(q.fetched_at).getTime() / 1000), price: Number(q.price) }))
     .sort((a, b) => a.time - b.time);
 
-  // outros ativos pra dropdown de comparação
   const { data: otherAssets } = await supabase
     .from('assets')
     .select('id, symbol, name, unit')
@@ -84,8 +85,6 @@ export default async function AssetDetail({ params }: { params: { id: string } }
   const oldest = series[series.length - 1];
   const pct = latest && oldest && oldest.price !== 0 ? ((latest.price - oldest.price) / oldest.price) * 100 : null;
   const isUsd = asset.unit?.includes('USD') ?? false;
-  const sparkPoints = series.slice(0, 80).map((p) => p.price).reverse();
-
   const min = series.length ? Math.min(...series.map((p) => p.price)) : null;
   const max = series.length ? Math.max(...series.map((p) => p.price)) : null;
 
@@ -95,7 +94,6 @@ export default async function AssetDetail({ params }: { params: { id: string } }
     .eq('asset_id', asset.id)
     .eq('user_id', user.id);
 
-  // USDBRL atual pra conversões
   const { data: usdAsset } = await supabase.from('assets').select('id').eq('symbol', 'USDBRL').single();
   let usdBrl: number | null = null;
   if (usdAsset) {
@@ -116,8 +114,14 @@ export default async function AssetDetail({ params }: { params: { id: string } }
 
   const lastSuccessfulFetch = logs?.find((l) => l.event === 'quote_inserted');
   const lastFailedFetch = logs?.find((l) => l.level === 'error' && (l.event === 'brapi_call_failed' || l.event === 'brapi_call_exception'));
+  const lastNotified = (alerts ?? [])
+    .map((a) => a.last_notified_at)
+    .filter(Boolean)
+    .sort()
+    .reverse()[0] as string | undefined;
 
-  // brapi endpoint URL (pra exibir)
+  const actualSymbol = ((lastSuccessfulFetch?.metadata as any) ?? {}).actual_symbol as string | undefined;
+
   const endpointPath = asset.brapi_kind === 'futures'
     ? `/api/v2/futures/quote?symbols=${asset.brapi_symbol}`
     : asset.brapi_kind === 'moedas'
@@ -125,31 +129,68 @@ export default async function AssetDetail({ params }: { params: { id: string } }
       : `/api/quote/${asset.brapi_symbol}`;
   const endpointUrl = `https://brapi.dev${endpointPath}`;
 
+  const categoryDot = CATEGORY_DOT[asset.category as keyof typeof CATEGORY_DOT] ?? 'var(--ink-3)';
+  const categoryLabelText =
+    asset.category === 'commodity' ? 'Commodity'
+    : asset.category === 'currency' ? 'Moeda'
+    : asset.category === 'stock' ? 'Ação'
+    : asset.category === 'crypto' ? 'Cripto'
+    : asset.category === 'index' ? 'Índice'
+    : asset.category;
+
+  const direction: 'up' | 'down' | 'flat' = pct == null ? 'flat' : pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+  const trendIcon = direction === 'up'
+    ? <TrendingUp className="h-3.5 w-3.5" />
+    : direction === 'down'
+      ? <TrendingDown className="h-3.5 w-3.5" />
+      : null;
+
   return (
-    <div className="min-h-screen bg-gradient-mesh">
+    <div className="min-h-screen bg-bg">
       <AppNav />
-      <section className="relative border-b border-zinc-200/60">
-        <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />
-        <div className="relative mx-auto max-w-6xl px-6 py-10">
-          <Link href="/dashboard" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition hover:text-zinc-900">
-            <ArrowLeft className="h-3.5 w-3.5" />Voltar pro dashboard
+
+      {/* Header denso */}
+      <section className="border-b border-line">
+        <div className="mx-auto max-w-7xl px-5 py-8">
+          <Link
+            href="/dashboard"
+            className="mb-4 inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-3 transition hover:text-ink"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Voltar pro dashboard
           </Link>
 
-          <div className="flex flex-wrap items-end justify-between gap-4 animate-fade-up">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <Badge variant={categoryVariant(asset.category)}>{categoryLabel(asset.category)}</Badge>
-                <code className="rounded bg-zinc-100 px-2 py-0.5 font-mono text-xs text-zinc-700">{asset.symbol}</code>
-                {!asset.active && <Badge variant="muted">Inativo</Badge>}
+          <div className="flex flex-wrap items-start justify-between gap-5 animate-fade-up">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span
+                  className="inline-block h-[7px] w-[7px] rounded-full"
+                  style={{ background: categoryDot }}
+                  aria-hidden
+                />
+                <code className="num text-[11px] font-medium uppercase tracking-wider text-ink-2">
+                  {asset.symbol}
+                </code>
+                <span className="text-[11px] text-ink-3">·</span>
+                <span className="text-[11px] font-medium text-ink-3">{categoryLabelText}</span>
+                {!asset.active && (
+                  <span className="rounded bg-down-soft px-1.5 py-0.5 text-[10px] font-medium text-down">inativo</span>
+                )}
               </div>
-              <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">{asset.name}</h1>
-              {asset.description && <p className="mt-1 max-w-2xl text-sm text-zinc-500">{asset.description}</p>}
+              <h1 className="text-[32px] font-bold leading-none tracking-[-0.03em] text-ink sm:text-[36px]">
+                {asset.name}
+              </h1>
+              {asset.description && (
+                <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-ink-2">
+                  {asset.description}
+                </p>
+              )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <TestAssetButton assetId={asset.id} />
               <Link href={`/alerts/new?asset=${asset.id}`}>
-                <Button variant="brand">
-                  <Plus className="h-4 w-4" />
+                <Button variant="brand" size="sm">
+                  <Plus className="h-3.5 w-3.5" />
                   Criar alerta
                 </Button>
               </Link>
@@ -158,43 +199,66 @@ export default async function AssetDetail({ params }: { params: { id: string } }
         </div>
       </section>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-6 py-10 lg:grid-cols-3">
-        {/* Bloco principal: gráfico + stats */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Preço atual */}
-          <Card className="shadow-lifted">
-            <CardContent className="pt-6">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Preço atual</div>
-                <div className="mt-1 flex items-baseline justify-between gap-4">
-                  <div>
-                    <div className="text-5xl font-bold tabular-nums tracking-tight text-zinc-900">
-                      {latest ? formatPrice(latest.price, isUsd ? 'USD' : 'BRL') : '—'}
-                    </div>
-                    <div className="mt-2 flex items-center gap-2 text-sm">
-                      <span className={`font-semibold tabular-nums ${pctClass(pct)}`}>{formatPct(pct)}</span>
-                      <span className="text-zinc-400">·</span>
-                      <span className="text-zinc-500">{series.length} pontos coletados</span>
-                    </div>
-                  </div>
-                  {asset.unit && (
-                    <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-1.5 text-xs font-mono text-zinc-600">
-                      {asset.unit}
-                    </div>
-                  )}
-                </div>
+      <main className="mx-auto grid max-w-7xl gap-5 px-5 py-8 lg:grid-cols-3">
+        {/* Coluna principal */}
+        <div className="space-y-5 lg:col-span-2">
+          {/* Preço grande + variação + min/max */}
+          <Card>
+            <CardContent className="pt-5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+                Preço atual
               </div>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <div className="num text-[48px] font-semibold leading-none tracking-[-0.02em] text-ink">
+                    {latest ? formatPrice(latest.price, isUsd ? 'USD' : 'BRL') : '—'}
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    {pct != null && (
+                      <span
+                        className={`num inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-semibold ${
+                          direction === 'up' ? 'bg-up-soft text-up'
+                          : direction === 'down' ? 'bg-down-soft text-down'
+                          : 'bg-panel-2 text-ink-2'
+                        }`}
+                      >
+                        {trendIcon}
+                        {formatPct(pct)}
+                      </span>
+                    )}
+                    <span className="num text-[11px] text-ink-3">
+                      {series.length} pontos coletados
+                    </span>
+                  </div>
+                </div>
+                {asset.unit && (
+                  <span className="num rounded-md border border-line bg-panel-2 px-2.5 py-1.5 text-[11px] font-medium text-ink-2">
+                    {asset.unit}
+                  </span>
+                )}
+              </div>
+
+              {(min != null && max != null && latest) && (
+                <div className="mt-5 grid grid-cols-3 gap-3 border-t border-line pt-4">
+                  <Mini label="Mínima" value={formatPrice(min, isUsd ? 'USD' : 'BRL')} />
+                  <Mini label="Máxima" value={formatPrice(max, isUsd ? 'USD' : 'BRL')} />
+                  <Mini
+                    label="Última coleta"
+                    value={relativeTime(latest.fetched_at)}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Gráfico real (lightweight-charts) */}
-          <Card className="shadow-lifted">
-            <CardContent className="pt-6">
+          {/* Gráfico */}
+          <Card>
+            <CardContent className="pt-5">
               <PriceChart data={chartData} unit={asset.unit} height={380} compareAssets={compareAssets} />
             </CardContent>
           </Card>
 
-          {/* Liquidez (só faz sentido pra futures com volume) */}
+          {/* Liquidez (futures) */}
           {asset.brapi_kind === 'futures' && lastLiquidityQuote && (
             <LiquidityBlock
               volumeBRL={lastLiquidityQuote.volume_brl}
@@ -207,7 +271,7 @@ export default async function AssetDetail({ params }: { params: { id: string } }
             />
           )}
 
-          {/* Calendar spread */}
+          {/* Calendar spread (futures) */}
           {asset.brapi_kind === 'futures' && spread && (
             <CalendarSpreadBlock spread={spread} unit={asset.unit} />
           )}
@@ -216,19 +280,22 @@ export default async function AssetDetail({ params }: { params: { id: string } }
           {alternates.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Repeat className="h-5 w-5 text-brand-600" />Em outras unidades</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Repeat className="h-4 w-4 text-brand-ink" />
+                  Em outras unidades
+                </CardTitle>
                 <CardDescription>
                   Conversões automáticas {usdBrl ? `· USD/BRL = R$ ${usdBrl.toFixed(4)}` : ''}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ConvertedPrice alternates={alternates} variant="block" />
-                <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50/50 p-3 text-xs text-zinc-600">
-                  <p>
+                <div className="mt-4 rounded-md border border-line bg-panel-2 px-3 py-2.5">
+                  <p className="text-[11px] leading-relaxed text-ink-2">
                     Cálculos derivados de: 1 saca = 60 kg ≈ 132,28 lb · 1 arroba = 15 kg ≈ 33,07 lb · 1 oz troy = 31,10 g.
-                    Conversões com BRL/USD usam a cotação spot do USDBRL mais recente coletada.
+                    Câmbio com USD/BRL spot mais recente.
                   </p>
-                  <Link href={`/calculator?asset=${asset.id}`} className="mt-2 inline-flex items-center gap-1 text-brand-700 hover:underline">
+                  <Link href={`/calculator?asset=${asset.id}`} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-brand-ink hover:underline">
                     <Calculator className="h-3 w-3" />
                     Abrir no conversor de venda →
                   </Link>
@@ -237,61 +304,41 @@ export default async function AssetDetail({ params }: { params: { id: string } }
             </Card>
           )}
 
-          {/* Fonte dos dados */}
+          {/* De onde vem esse dado — TIMELINE */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Database className="h-5 w-5 text-brand-600" />De onde vem esse dado</CardTitle>
-              <CardDescription>Endpoint, ticker e diagnóstico da última coleta.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-brand-ink" />
+                De onde vem esse dado
+              </CardTitle>
+              <CardDescription>
+                Caminho da coleta — provedor → coleta → banco → seu alerta.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <KVRow label="Provedor" value="brapi.dev" />
-              <KVRow label="Endpoint kind" value={asset.brapi_kind} mono />
-              <KVRow label="Símbolo na brapi" value={asset.brapi_symbol} mono />
-              <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">URL completa da request</div>
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-2">
-                  <code className="truncate font-mono text-xs text-zinc-700">{endpointUrl}</code>
-                  <a href={endpointUrl} target="_blank" rel="noreferrer" className="flex-shrink-0 text-brand-700 hover:text-brand-800" title="Abrir no navegador">
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </div>
-              </div>
+            <CardContent>
+              <DataSourceTimeline
+                provider="brapi.dev"
+                endpointUrl={endpointUrl}
+                brapiKind={asset.brapi_kind}
+                brapiSymbol={asset.brapi_symbol}
+                actualSymbol={actualSymbol ?? null}
+                lastFetchAt={lastSuccessfulFetch?.created_at ?? null}
+                lastFetchDuration={lastSuccessfulFetch?.duration_ms ?? null}
+                lastFetchOk={!!lastSuccessfulFetch && !lastFailedFetch || (lastSuccessfulFetch?.created_at ?? '') > (lastFailedFetch?.created_at ?? '')}
+                lastFetchError={lastFailedFetch?.error_message ?? null}
+                insertedAt={latest?.fetched_at ?? null}
+                insertedPrice={latest?.price ?? null}
+                userAlertCount={alerts?.length ?? 0}
+                lastNotifiedAt={lastNotified ?? null}
+              />
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/40 p-3">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800">
-                    <CheckCircle className="h-3.5 w-3.5" />Última coleta bem-sucedida
-                  </div>
-                  {lastSuccessfulFetch ? (
-                    <>
-                      <div className="mt-1 text-sm font-semibold text-zinc-900">{relativeTime(lastSuccessfulFetch.created_at)}</div>
-                      {lastSuccessfulFetch.duration_ms && <div className="text-xs text-zinc-500">em {lastSuccessfulFetch.duration_ms}ms</div>}
-                    </>
-                  ) : (
-                    <div className="mt-1 text-sm text-zinc-500">Nenhuma ainda</div>
-                  )}
-                </div>
-                <div className="rounded-lg border border-rose-200/60 bg-rose-50/40 p-3">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-800">
-                    <AlertCircle className="h-3.5 w-3.5" />Última falha
-                  </div>
-                  {lastFailedFetch ? (
-                    <>
-                      <div className="mt-1 text-sm font-semibold text-zinc-900">{relativeTime(lastFailedFetch.created_at)}</div>
-                      <div className="truncate text-xs text-rose-700" title={lastFailedFetch.error_message ?? ''}>{lastFailedFetch.error_message}</div>
-                    </>
-                  ) : (
-                    <div className="mt-1 text-sm text-zinc-500">Sem falhas</div>
-                  )}
-                </div>
-              </div>
-
+              {/* Raw JSON colapsado, sutil */}
               {latest && quotes && quotes[0]?.raw && (
-                <details className="rounded-lg border border-zinc-200 bg-zinc-50/30">
-                  <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-zinc-700">
-                    Ver retorno bruto da última coleta (raw)
+                <details className="mt-5 rounded-md border border-line bg-panel-2">
+                  <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-ink-2 hover:text-ink">
+                    Ver retorno bruto da última coleta (raw JSON)
                   </summary>
-                  <pre className="overflow-x-auto border-t border-zinc-200 bg-zinc-50/60 p-3 font-mono text-[10px] text-zinc-700">
+                  <pre className="overflow-x-auto border-t border-line bg-bg p-3 font-mono text-[10px] leading-relaxed text-ink-2">
 {JSON.stringify(quotes[0].raw, null, 2)}
                   </pre>
                 </details>
@@ -299,130 +346,109 @@ export default async function AssetDetail({ params }: { params: { id: string } }
             </CardContent>
           </Card>
 
-          {/* Histórico de coletas */}
+          {/* Histórico de coletas — TABELA DENSA */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-brand-600" />Histórico recente</CardTitle>
-              <CardDescription>Últimos 30 pontos de cotação coletados.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-4 w-4 text-brand-ink" />
+                Histórico de coletas
+              </CardTitle>
+              <CardDescription>Últimos 30 pontos de cotação gravados.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <ul className="divide-y divide-zinc-100">
-                {(quotes ?? []).slice(0, 30).map((q) => (
-                  <li key={q.id} className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
-                      <code className="font-mono text-sm tabular-nums text-zinc-900">
-                        {formatPrice(q.price, isUsd ? 'USD' : 'BRL')}
-                      </code>
-                      <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600">{q.source}</span>
-                    </div>
-                    <div className="text-right text-xs text-zinc-500">
-                      <div>{new Date(q.fetched_at).toLocaleString('pt-BR')}</div>
-                      <div className="text-zinc-400">{relativeTime(q.fetched_at)}</div>
-                    </div>
-                  </li>
-                ))}
-                {(!quotes || quotes.length === 0) && (
-                  <li className="py-8 text-center text-sm text-zinc-500">Nenhuma cotação ainda.</li>
-                )}
-              </ul>
+            <CardContent className="p-0">
+              <QuotesTable
+                rows={(quotes ?? []).map((q) => ({
+                  id: q.id, price: Number(q.price), fetched_at: q.fetched_at, source: q.source
+                }))}
+                isUsd={isUsd}
+              />
             </CardContent>
           </Card>
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Seus alertas pra esse ativo */}
+        <aside className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Seus alertas</CardTitle>
-              <CardDescription>{alerts?.length ?? 0} configurado{alerts?.length === 1 ? '' : 's'} pra esse ativo.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-brand-ink" />
+                Seus alertas
+              </CardTitle>
+              <CardDescription>
+                {alerts?.length ?? 0} configurado{alerts?.length === 1 ? '' : 's'} pra esse ativo.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {(alerts ?? []).map((a: any) => (
-                <Link key={a.id} href={`/alerts/${a.id}`} className="block rounded-lg border border-zinc-200 bg-white p-3 text-sm transition hover:border-brand-300 hover:shadow-soft">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 rounded-full ${a.active ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
-                    {a.alert_type === 'price_target' ? (
-                      <>
-                        <span className="text-xs text-zinc-500">{a.target_direction === 'above' ? '≥' : a.target_direction === 'below' ? '≤' : '↔'}</span>
-                        <span className="font-mono font-semibold text-zinc-900">
-                          {Number(a.target_price).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-semibold text-zinc-900">≥ {a.threshold_pct}%</span>
-                        <span className="text-zinc-500">
-                          {a.comparison_type === 'last_message' ? 'desde última msg' : `${a.comparison_days}d atrás`}
-                        </span>
-                      </>
+                <Link
+                  key={a.id}
+                  href={`/alerts/${a.id}`}
+                  className="card-hover block rounded-md border border-line bg-panel p-3 transition"
+                >
+                  <div className="flex items-center justify-between gap-2 text-[12px]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${a.active ? 'bg-brand' : 'bg-line-strong'}`} />
+                      {a.alert_type === 'price_target' ? (
+                        <>
+                          <span className="text-ink-3">
+                            {a.target_direction === 'above' ? '≥' : a.target_direction === 'below' ? '≤' : '↔'}
+                          </span>
+                          <span className="num font-semibold text-ink">
+                            {Number(a.target_price).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="num font-semibold text-ink">≥ {a.threshold_pct}%</span>
+                          <span className="text-ink-3">
+                            {a.comparison_type === 'last_message' ? 'desde última msg' : `${a.comparison_days}d atrás`}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {a.last_notified_at && (
+                      <span className="num flex-shrink-0 text-[10px] text-ink-3">
+                        {relativeTime(a.last_notified_at)}
+                      </span>
                     )}
                   </div>
                 </Link>
               ))}
               {(!alerts || alerts.length === 0) && (
-                <p className="py-4 text-center text-xs text-zinc-500">Nenhum alerta ainda.</p>
+                <p className="px-1 py-3 text-center text-[12px] text-ink-3">Nenhum alerta ainda.</p>
               )}
               <Link href={`/alerts/new?asset=${asset.id}`} className="block">
-                <Button variant="outline" className="w-full">
-                  <Plus className="h-4 w-4" />Criar alerta
+                <Button variant="outline" size="sm" className="w-full">
+                  <Plus className="h-3.5 w-3.5" />
+                  Criar alerta
                 </Button>
               </Link>
             </CardContent>
           </Card>
 
-          {/* Logs do ativo */}
           <Card>
             <CardHeader>
-              <CardTitle>Eventos recentes</CardTitle>
-              <CardDescription>Últimos 30 eventos do sistema relacionados a esse ativo.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-brand-ink" />
+                Eventos do sistema
+              </CardTitle>
+              <CardDescription>Últimos 30 eventos relacionados.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="divide-y divide-zinc-100 text-xs">
-                {(logs ?? []).map((l: any) => (
-                  <li key={l.id} className="flex items-start gap-2 py-2">
-                    <LogDot level={l.level} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-zinc-900">{l.event}</span>
-                        <span className="text-zinc-400">{relativeTime(l.created_at)}</span>
-                      </div>
-                      {l.error_message && <p className="mt-0.5 truncate text-rose-600" title={l.error_message}>{l.error_message}</p>}
-                      {l.response_status && <p className="font-mono text-[10px] text-zinc-500">HTTP {l.response_status} · {l.duration_ms}ms</p>}
-                    </div>
-                  </li>
-                ))}
-                {(!logs || logs.length === 0) && (
-                  <li className="py-4 text-center text-zinc-500">Sem eventos ainda.</li>
-                )}
-              </ul>
+              <EventsTimeline events={(logs ?? []) as any} />
             </CardContent>
           </Card>
-        </div>
+        </aside>
       </main>
     </div>
   );
 }
 
-function Mini({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Mini({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{label}</div>
-      <div className={`mt-0.5 font-semibold text-zinc-900 ${mono ? 'font-mono text-sm' : ''}`}>{value}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">{label}</div>
+      <div className="num mt-0.5 text-[14px] font-medium text-ink">{value}</div>
     </div>
   );
-}
-
-function KVRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
-      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{label}</span>
-      <span className={`text-sm text-zinc-900 ${mono ? 'font-mono' : ''}`}>{value}</span>
-    </div>
-  );
-}
-
-function LogDot({ level }: { level: string }) {
-  const cls = level === 'error' ? 'bg-rose-500' : level === 'warn' ? 'bg-amber-500' : level === 'info' ? 'bg-brand-500' : 'bg-zinc-300';
-  return <span className={`mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full ${cls}`} />;
 }

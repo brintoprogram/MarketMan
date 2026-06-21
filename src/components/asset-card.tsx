@@ -17,7 +17,7 @@ export interface AssetCardData {
   fetchedAt?: string | null;     // timestamp da última cotação
 }
 
-const CATEGORY_DOT: Record<string, string> = {
+export const CATEGORY_DOT: Record<string, string> = {
   commodity: '#F59E0B',
   currency:  '#0EA5E9',
   stock:     '#8B5CF6',
