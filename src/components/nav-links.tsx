@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { LayoutDashboard, Bell, CalendarClock, Users, MessageCircle, Sparkles, Calculator, Settings, BookOpen, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Bell, CalendarClock, Users, MessageCircle, Sparkles, Calculator, Settings, BookOpen, Workflow, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const LINKS = [
   { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/alerts',       icon: Bell,            label: 'Alertas' },
+  { href: '/flows',        icon: Workflow,        label: 'Fluxos' },
   { href: '/reports',      icon: CalendarClock,   label: 'Relatórios' },
   { href: '/recipients',   icon: Users,           label: 'Destinatários' },
   { href: '/messages',     icon: MessageCircle,   label: 'Mensagens' },
