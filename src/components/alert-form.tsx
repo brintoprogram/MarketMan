@@ -1,16 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { createClient } from '@/lib/supabase/client';
 import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
 import { RecipientPicker, type RecipientOption } from '@/components/recipient-picker';
-import { Percent, Target, TrendingUp, TrendingDown, Repeat, Users } from 'lucide-react';
+import { WhatsAppPreview, type PreviewAsset } from '@/components/whatsapp-preview';
+import { createClient } from '@/lib/supabase/client';
+import { toast } from '@/components/ui/toast';
+import { Percent, Target, TrendingUp, TrendingDown, Repeat } from 'lucide-react';
 
 interface Asset {
   id: string;
@@ -23,6 +25,8 @@ interface Asset {
 interface Props {
   assets: Asset[];
   recipients?: RecipientOption[];
+  /** Mapa assetId → { price, prevPrice (7d atrás) } pra alimentar o preview. */
+  latestByAsset?: Record<string, { price: number; prevPrice?: number | null }>;
   preselectedAssetId?: string;
   preselectedThreshold?: string;
   preselectedTarget?: string;
@@ -37,15 +41,24 @@ interface Props {
     target_price: number | null;
     target_direction: 'above' | 'below' | 'crosses' | null;
     message_template: string | null;
-    active: boolean;
     max_per_day?: number | null;
     recipient_ids?: string[] | null;
+    active: boolean;
   };
 }
 
+const PCT_VARS = [
+  '{asset}', '{symbol}', '{price}', '{pct}',
+  '{ref_price}', '{ref_label}', '{since_last_pct}', '{direction}', '{arrow}'
+];
+const TARGET_VARS = [
+  '{asset}', '{symbol}', '{price}', '{target}', '{condition}', '{arrow}'
+];
+
 export function AlertForm({
-  assets, recipients = [], preselectedAssetId, preselectedThreshold,
-  preselectedTarget, preselectedTargetDirection, initial
+  assets, recipients = [], latestByAsset = {},
+  preselectedAssetId, preselectedThreshold, preselectedTarget, preselectedTargetDirection,
+  initial
 }: Props) {
   const router = useRouter();
   const [assetId, setAssetId] = useState(initial?.asset_id ?? preselectedAssetId ?? assets[0]?.id ?? '');
@@ -69,16 +82,55 @@ export function AlertForm({
   const [maxPerDay, setMaxPerDay] = useState<string>(initial?.max_per_day != null ? String(initial.max_per_day) : '');
   const [recipientIds, setRecipientIds] = useState<string[]>(initial?.recipient_ids ?? []);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedAsset = useMemo(() => assets.find((a) => a.id === assetId), [assets, assetId]);
 
+  const previewAsset: PreviewAsset | null = useMemo(() => {
+    if (!selectedAsset) return null;
+    const latest = latestByAsset[selectedAsset.id];
+    return {
+      symbol: selectedAsset.symbol,
+      name: selectedAsset.name,
+      unit: selectedAsset.unit,
+      price: latest?.price ?? null,
+      prevPrice: latest?.prevPrice ?? null
+    };
+  }, [selectedAsset, latestByAsset]);
+
+  const firstRecipientName = useMemo(() => {
+    if (recipientIds.length === 0) {
+      const self = recipients.find((r) => r.is_self);
+      return self?.name ?? null;
+    }
+    return recipients.find((r) => r.id === recipientIds[0])?.name ?? null;
+  }, [recipientIds, recipients]);
+
+  function insertVariable(v: string) {
+    const el = textareaRef.current;
+    if (!el) { setTemplate((t) => t + v); return; }
+    const start = el.selectionStart ?? template.length;
+    const end = el.selectionEnd ?? template.length;
+    const next = template.slice(0, start) + v + template.slice(end);
+    setTemplate(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + v.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true); setError(null);
+    setLoading(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setError('Sessão expirada'); setLoading(false); return; }
+    if (!user) {
+      toast.error('Sessão expirada', 'Faça login de novo.');
+      setLoading(false);
+      return;
+    }
 
     const payload: any = {
       user_id: user.id,
@@ -103,7 +155,6 @@ export function AlertForm({
     } else {
       payload.target_price = parseFloat(targetPrice);
       payload.target_direction = targetDirection;
-      // mantém threshold_pct dummy pra não violar not-null se houver
       payload.threshold_pct = 1;
       payload.comparison_type = 'last_message';
       payload.comparison_days = null;
@@ -114,241 +165,291 @@ export function AlertForm({
       : await supabase.from('alerts').insert(payload);
 
     setLoading(false);
-    if (result.error) { setError(result.error.message); return; }
-    router.push('/alerts'); router.refresh();
+    if (result.error) {
+      toast.error('Não consegui salvar', result.error.message);
+      return;
+    }
+    toast.success(initial ? 'Alerta atualizado' : 'Alerta criado', `${selectedAsset?.name ?? ''} ${alertType === 'percentage' ? `· ≥ ${threshold}%` : `· alvo ${targetPrice}`}`);
+    router.push('/alerts');
+    router.refresh();
   }
 
+  const availableVars = alertType === 'percentage' ? PCT_VARS : TARGET_VARS;
+
   return (
-    <Card className="shadow-lifted">
-      <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Tipo de alerta */}
-          <div>
-            <Label>Tipo de alerta</Label>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setAlertType('percentage')}
-                className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
-                  alertType === 'percentage'
-                    ? 'border-brand-400 bg-brand-50/40 shadow-soft ring-2 ring-brand-500/20'
-                    : 'border-zinc-200 bg-white hover:border-zinc-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 text-sm font-semibold text-zinc-900">
-                  <Percent className="h-3.5 w-3.5" />
-                  Variação %
-                </div>
-                <span className="text-xs text-zinc-500">
-                  Avisa a cada X% de variação a partir de uma referência.
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAlertType('price_target')}
-                className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
-                  alertType === 'price_target'
-                    ? 'border-brand-400 bg-brand-50/40 shadow-soft ring-2 ring-brand-500/20'
-                    : 'border-zinc-200 bg-white hover:border-zinc-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 text-sm font-semibold text-zinc-900">
-                  <Target className="h-3.5 w-3.5" />
-                  Preço-alvo
-                </div>
-                <span className="text-xs text-zinc-500">
-                  Avisa quando o preço passar de um valor absoluto seu.
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Ativo */}
-          <div className="space-y-2">
-            <Label htmlFor="asset">Ativo</Label>
-            <Select id="asset" value={assetId} onChange={(e) => setAssetId(e.target.value)} required>
-              {assets.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} ({a.symbol})</option>
-              ))}
-            </Select>
-            {selectedAsset && (
-              <div className="flex items-center gap-2 pt-1">
-                <Badge variant={categoryVariant(selectedAsset.category)}>{categoryLabel(selectedAsset.category)}</Badge>
-                {selectedAsset.unit && <span className="font-mono text-xs text-zinc-500">{selectedAsset.unit}</span>}
-              </div>
-            )}
-          </div>
-
-          {/* ========== PERCENTAGE ========== */}
-          {alertType === 'percentage' && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="threshold">Variação mínima para alertar</Label>
-                <div className="relative">
-                  <Input
-                    id="threshold"
-                    type="number" step="0.1" min="0.1" max="100"
-                    value={threshold} onChange={(e) => setThreshold(e.target.value)}
-                    required
-                    className="pr-10 text-lg font-semibold tabular-nums"
-                  />
-                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-zinc-400">%</span>
-                </div>
-                <p className="text-xs leading-relaxed text-zinc-500">
-                  Ex: <strong className="font-semibold text-zinc-700">1,5%</strong> = avisa quando o preço variar pelo menos 1,5%.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="comparison">Comparar com</Label>
-                <Select id="comparison" value={comparison} onChange={(e) => setComparison(e.target.value as typeof comparison)}>
-                  <option value="last_message">Preço da última mensagem enviada</option>
-                  <option value="7d">7 dias atrás</option>
-                  <option value="30d">30 dias atrás</option>
-                  <option value="custom">Período customizado…</option>
-                </Select>
-                <p className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 text-xs leading-relaxed text-zinc-600">
-                  {comparison === 'last_message'
-                    ? 'Dispara quando a variação atinge o limite desde o último aviso. Reseta o ponto de comparação a cada disparo.'
-                    : 'Avalia a variação acumulada desde o período escolhido.'}
-                </p>
-              </div>
-
-              {comparison === 'custom' && (
-                <div className="space-y-2">
-                  <Label htmlFor="days">Quantos dias atrás?</Label>
-                  <Input id="days" type="number" min="1" max="365" value={customDays} onChange={(e) => setCustomDays(e.target.value)} required />
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ========== PRICE TARGET ========== */}
-          {alertType === 'price_target' && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="target">Preço-alvo {selectedAsset?.unit && <span className="font-mono text-zinc-400">({selectedAsset.unit})</span>}</Label>
-                <Input
-                  id="target"
-                  type="number" step="any" min="0"
-                  value={targetPrice} onChange={(e) => setTargetPrice(e.target.value)}
-                  required
-                  className="text-lg font-semibold tabular-nums"
+    <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      {/* ============================ FORM ============================ */}
+      <Card>
+        <CardContent className="pt-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Tipo */}
+            <div>
+              <Label>Tipo de alerta</Label>
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <TypeButton
+                  active={alertType === 'percentage'}
+                  onClick={() => setAlertType('percentage')}
+                  icon={<Percent className="h-3.5 w-3.5" />}
+                  title="Variação %"
+                  hint="Avisa a cada X% de variação a partir de uma referência."
+                />
+                <TypeButton
+                  active={alertType === 'price_target'}
+                  onClick={() => setAlertType('price_target')}
+                  icon={<Target className="h-3.5 w-3.5" />}
+                  title="Preço-alvo"
+                  hint="Avisa quando o preço passar de um valor absoluto."
                 />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label>Disparar quando o preço…</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <DirectionButton
-                    active={targetDirection === 'above'}
-                    onClick={() => setTargetDirection('above')}
-                    icon={<TrendingUp className="h-4 w-4" />}
-                    label="Subir acima"
-                    hint="Avisa só uma vez quando o preço atingir ou ultrapassar o alvo"
-                  />
-                  <DirectionButton
-                    active={targetDirection === 'below'}
-                    onClick={() => setTargetDirection('below')}
-                    icon={<TrendingDown className="h-4 w-4" />}
-                    label="Cair abaixo"
-                    hint="Avisa só uma vez quando o preço cair pra baixo do alvo"
-                  />
-                  <DirectionButton
-                    active={targetDirection === 'crosses'}
-                    onClick={() => setTargetDirection('crosses')}
-                    icon={<Repeat className="h-4 w-4" />}
-                    label="Cruzar"
-                    hint="Avisa toda vez que o preço cruzar o alvo (subindo ou descendo)"
+            {/* Ativo */}
+            <div className="space-y-1.5">
+              <Label htmlFor="asset">Ativo</Label>
+              <Select id="asset" value={assetId} onChange={(e) => setAssetId(e.target.value)} required>
+                {assets.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.symbol})</option>
+                ))}
+              </Select>
+              {selectedAsset && (
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Badge variant={categoryVariant(selectedAsset.category)}>{categoryLabel(selectedAsset.category)}</Badge>
+                  {selectedAsset.unit && <span className="num text-[11px] text-ink-3">{selectedAsset.unit}</span>}
+                  {previewAsset?.price != null && (
+                    <span className="num text-[11px] text-ink-2">
+                      atual {previewAsset.price.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ============ PERCENTAGE ============ */}
+            {alertType === 'percentage' && (
+              <>
+                <div className="space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <Label htmlFor="threshold">Variação mínima</Label>
+                    <span className="num text-[11px] text-ink-3">0,1% – 20%</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={20}
+                      step={0.1}
+                      value={parseFloat(threshold) || 0}
+                      onChange={(e) => setThreshold(e.target.value)}
+                      className="flex-1 accent-[color:var(--brand)]"
+                    />
+                    <div className="relative w-28">
+                      <Input
+                        id="threshold"
+                        type="number" step="0.1" min="0.1" max="100"
+                        value={threshold} onChange={(e) => setThreshold(e.target.value)}
+                        required
+                        className="num pr-8 text-right"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-ink-3">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Comparar com</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { v: 'last_message', label: 'Desde última msg' },
+                      { v: '7d',           label: '7 dias atrás' },
+                      { v: '30d',          label: '30 dias atrás' },
+                      { v: 'custom',       label: 'Customizado…' }
+                    ].map((opt) => (
+                      <SegBtn
+                        key={opt.v}
+                        active={comparison === opt.v}
+                        onClick={() => setComparison(opt.v as any)}
+                      >
+                        {opt.label}
+                      </SegBtn>
+                    ))}
+                  </div>
+                  {comparison === 'custom' && (
+                    <div className="flex items-center gap-2 pt-1.5">
+                      <Input
+                        type="number" min="1" max="365"
+                        value={customDays} onChange={(e) => setCustomDays(e.target.value)}
+                        className="num w-28"
+                      />
+                      <span className="text-[12px] text-ink-2">dias atrás</span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ============ PRICE TARGET ============ */}
+            {alertType === 'price_target' && (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <Label htmlFor="target">Preço-alvo</Label>
+                    {selectedAsset?.unit && (
+                      <span className="num text-[11px] text-ink-3">{selectedAsset.unit}</span>
+                    )}
+                  </div>
+                  <Input
+                    id="target"
+                    type="number" step="any" min="0"
+                    value={targetPrice} onChange={(e) => setTargetPrice(e.target.value)}
+                    required
+                    className="num"
                   />
                 </div>
+
+                <div className="space-y-1.5">
+                  <Label>Disparar quando o preço…</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <DirBtn active={targetDirection === 'above'} onClick={() => setTargetDirection('above')} icon={<TrendingUp className="h-3.5 w-3.5" />}>Subir acima</DirBtn>
+                    <DirBtn active={targetDirection === 'below'} onClick={() => setTargetDirection('below')} icon={<TrendingDown className="h-3.5 w-3.5" />}>Cair abaixo</DirBtn>
+                    <DirBtn active={targetDirection === 'crosses'} onClick={() => setTargetDirection('crosses')} icon={<Repeat className="h-3.5 w-3.5" />}>Cruzar</DirBtn>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Destinatários */}
+            {recipients.length > 1 && (
+              <RecipientPicker recipients={recipients} value={recipientIds} onChange={setRecipientIds} />
+            )}
+
+            {/* Template + chips */}
+            <div className="space-y-1.5">
+              <Label htmlFor="template">Mensagem (template)</Label>
+              {/* chips clicáveis */}
+              <div className="flex flex-wrap gap-1">
+                {availableVars.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => insertVariable(v)}
+                    className="num inline-flex h-[24px] items-center rounded border border-line bg-panel-2 px-1.5 text-[10px] font-medium text-ink-2 transition hover:border-brand hover:bg-brand-soft hover:text-brand-ink"
+                  >
+                    {v}
+                  </button>
+                ))}
               </div>
-            </>
-          )}
+              <textarea
+                id="template"
+                ref={textareaRef}
+                rows={5}
+                value={template}
+                onChange={(e) => setTemplate(e.target.value)}
+                placeholder={alertType === 'percentage'
+                  ? 'Deixe vazio pra usar o template padrão. Ou crie o seu: ex {asset} {direction} {pct} desde {ref_label}'
+                  : 'Deixe vazio pra usar o padrão. Ex: {asset} {condition} do alvo {target}'}
+                className="block w-full rounded-md border border-line-strong bg-panel px-3 py-2 text-[13px] leading-relaxed text-ink shadow-[inset_0_1px_0_rgba(0,0,0,.02)] placeholder:text-ink-3 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft"
+              />
+              <p className="text-[11px] text-ink-3">
+                Toque numa variável pra inserir. Use *<span className="font-semibold">negrito</span>* e _<span className="italic">itálico</span>_ no estilo do WhatsApp.
+              </p>
+            </div>
 
-          {/* Limite por alerta */}
-          <div className="space-y-2">
-            <Label htmlFor="max-per-day">Máximo de avisos por dia (opcional)</Label>
-            <Input
-              id="max-per-day"
-              type="number" min="1" max="50"
-              value={maxPerDay}
-              onChange={(e) => setMaxPerDay(e.target.value)}
-              placeholder="deixe vazio pra ilimitado"
-              className="text-base"
-            />
-            <p className="text-xs text-zinc-500">
-              Limita quantas vezes esse alerta pode disparar em 24h. Útil pra alertas baseados em &quot;dias atrás&quot; que podem disparar várias vezes seguidas.
-            </p>
-          </div>
+            {/* Limites */}
+            <div className="space-y-1.5">
+              <Label htmlFor="max-per-day">Máx. avisos por dia (opcional)</Label>
+              <Input
+                id="max-per-day"
+                type="number" min="1" max="50"
+                value={maxPerDay}
+                onChange={(e) => setMaxPerDay(e.target.value)}
+                placeholder="ilimitado se vazio"
+                className="num"
+              />
+            </div>
 
-          {/* Template msg */}
-          <div className="space-y-2">
-            <Label htmlFor="template">Mensagem personalizada (opcional)</Label>
-            <textarea
-              id="template"
-              rows={3}
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-              placeholder={alertType === 'percentage'
-                ? "Ex: Atenção! {asset} variou {pct} desde {ref_label}. Preço atual: {price}"
-                : "Ex: {asset} {condition} do alvo {target}! Atual: {price}"}
-              className="flex w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm shadow-inner-soft transition placeholder:text-zinc-400 focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/15"
-            />
-            <p className="text-xs leading-relaxed text-zinc-500">
-              Variáveis:{' '}
-              {alertType === 'percentage' ? (
-                <>
-                  <Code>{'{asset}'}</Code> <Code>{'{price}'}</Code> <Code>{'{pct}'}</Code>{' '}
-                  <Code>{'{ref_price}'}</Code> <Code>{'{ref_label}'}</Code> <Code>{'{since_last_pct}'}</Code>
-                </>
-              ) : (
-                <>
-                  <Code>{'{asset}'}</Code> <Code>{'{symbol}'}</Code> <Code>{'{price}'}</Code>{' '}
-                  <Code>{'{target}'}</Code> <Code>{'{condition}'}</Code>
-                </>
-              )}
-            </p>
-          </div>
+            <div className="flex gap-2 border-t border-line pt-4">
+              <Button type="submit" variant="brand" disabled={loading}>
+                {loading ? 'Salvando…' : initial ? 'Salvar alterações' : 'Criar alerta'}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => router.back()}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-          {error && (
-            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
-          )}
-
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" variant="brand" disabled={loading} size="lg">
-              {loading ? 'Salvando...' : initial ? 'Salvar alterações' : 'Criar alerta'}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => router.back()} size="lg">Cancelar</Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      {/* ============================ PREVIEW ============================ */}
+      <div className="space-y-3 lg:sticky lg:top-[76px] lg:self-start">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+          Prévia no WhatsApp
+        </div>
+        <WhatsAppPreview
+          asset={previewAsset}
+          alertType={alertType}
+          threshold={parseFloat(threshold) || 0}
+          comparison={comparison}
+          customDays={parseInt(customDays, 10) || 14}
+          targetPrice={parseFloat(targetPrice) || 0}
+          targetDirection={targetDirection}
+          template={template}
+          recipientName={firstRecipientName}
+        />
+        <p className="text-[11px] leading-relaxed text-ink-3">
+          A prévia atualiza em tempo real conforme você edita. Valores reais do ativo selecionado são usados como referência.
+        </p>
+      </div>
+    </div>
   );
 }
 
-function DirectionButton({ active, onClick, icon, label, hint }: {
-  active: boolean; onClick: () => void; icon: React.ReactNode; label: string; hint: string;
+function TypeButton({ active, onClick, icon, title, hint }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; title: string; hint: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title={hint}
-      className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
-        active
-          ? 'border-brand-400 bg-brand-50/40 shadow-soft ring-2 ring-brand-500/20'
-          : 'border-zinc-200 bg-white hover:border-zinc-300'
+      className={`flex flex-col items-start gap-0.5 rounded-md border px-3 py-2.5 text-left transition ${
+        active ? 'border-brand bg-brand-soft' : 'border-line bg-panel hover:border-line-strong hover:bg-panel-2'
       }`}
     >
-      <div className="flex items-center gap-1.5 text-sm font-semibold text-zinc-900">
-        {icon}
-        {label}
+      <div className={`flex items-center gap-1.5 text-[12.5px] font-semibold ${active ? 'text-brand-ink' : 'text-ink'}`}>
+        {icon}{title}
       </div>
+      <span className="text-[11px] leading-snug text-ink-2">{hint}</span>
     </button>
   );
 }
 
-function Code({ children }: { children: React.ReactNode }) {
-  return <code className="rounded bg-zinc-100 px-1 font-mono text-[10px]">{children}</code>;
+function DirBtn({ active, onClick, icon, children }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-2 text-[12px] font-semibold transition ${
+        active ? 'border-brand bg-brand-soft text-brand-ink' : 'border-line bg-panel text-ink-2 hover:border-line-strong hover:bg-panel-2'
+      }`}
+    >
+      {icon}{children}
+    </button>
+  );
+}
+
+function SegBtn({ active, onClick, children }: {
+  active: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition ${
+        active ? 'border-ink bg-ink text-bg' : 'border-line bg-panel text-ink-2 hover:border-line-strong hover:bg-panel-2'
+      }`}
+    >
+      {children}
+    </button>
+  );
 }

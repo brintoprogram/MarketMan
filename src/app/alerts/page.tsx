@@ -2,10 +2,10 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { AppNav } from '@/components/nav';
 import { Button } from '@/components/ui/button';
-import { Badge, categoryVariant, categoryLabel } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
 import { formatPrice, relativeTime } from '@/lib/format';
 import { Bell, Plus, ArrowRight } from 'lucide-react';
+import { CATEGORY_DOT } from '@/components/asset-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,8 @@ export default async function AlertsList() {
   const { data: alerts } = await supabase
     .from('alerts')
     .select(`
-      id, alert_type, threshold_pct, comparison_type, comparison_days, active, reference_price, last_notified_at, created_at,
+      id, alert_type, threshold_pct, comparison_type, comparison_days, active,
+      reference_price, last_notified_at, created_at,
       target_price, target_direction,
       asset:assets(symbol, name, category, unit)
     `)
@@ -25,25 +26,29 @@ export default async function AlertsList() {
     .order('created_at', { ascending: false });
 
   const activeCount = (alerts ?? []).filter((a: any) => a.active).length;
+  const total = alerts?.length ?? 0;
 
   return (
-    <div className="min-h-screen bg-gradient-mesh">
+    <div className="min-h-screen bg-bg">
       <AppNav />
 
-      <section className="relative border-b border-zinc-200/60">
-        <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />
-        <div className="relative mx-auto max-w-5xl px-6 py-10">
-          <div className="flex items-end justify-between gap-6">
+      <section className="border-b border-line">
+        <div className="mx-auto max-w-7xl px-5 py-8">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="animate-fade-up">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-600">Configurações</div>
-              <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">Seus alertas</h1>
-              <p className="mt-1 text-sm text-zinc-500">
-                {activeCount} ativo{activeCount === 1 ? '' : 's'} de {alerts?.length ?? 0} configurado{alerts?.length === 1 ? '' : 's'}
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink">
+                Configurações
+              </div>
+              <h1 className="text-[32px] font-bold leading-none tracking-[-0.03em] text-ink sm:text-[36px]">
+                Seus alertas
+              </h1>
+              <p className="num mt-2 text-[12px] text-ink-3">
+                <span className="text-ink">{activeCount}</span> ativos · <span className="text-ink">{total}</span> total
               </p>
             </div>
             <Link href="/alerts/new" className="animate-fade-up-delay-1">
-              <Button variant="brand" size="lg">
-                <Plus className="h-4 w-4" />
+              <Button variant="brand" size="sm">
+                <Plus className="h-3.5 w-3.5" />
                 Novo alerta
               </Button>
             </Link>
@@ -51,82 +56,94 @@ export default async function AlertsList() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        {(!alerts || alerts.length === 0) ? (
-          <div className="animate-fade-up rounded-2xl border-2 border-dashed border-zinc-200 bg-white/60 p-16 text-center backdrop-blur">
-            <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-200/60">
-              <Bell className="h-7 w-7" />
+      <main className="mx-auto max-w-7xl px-5 py-8">
+        {total === 0 ? (
+          <div className="animate-fade-up rounded-xl border border-line bg-panel p-12 text-center shadow-card">
+            <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-md bg-brand-soft text-brand-ink">
+              <Bell className="h-5 w-5" />
             </div>
-            <h3 className="mb-1 text-lg font-semibold text-zinc-900">Nenhum alerta ainda</h3>
-            <p className="mb-6 text-sm text-zinc-500">Configure seu primeiro alerta e receba avisos no WhatsApp.</p>
-            <Link href="/alerts/new">
-              <Button variant="brand" size="lg">Criar primeiro alerta</Button>
-            </Link>
+            <h3 className="mb-1 text-[15px] font-semibold text-ink">Nenhum alerta ainda</h3>
+            <p className="mb-5 mx-auto max-w-md text-[12px] leading-relaxed text-ink-2">
+              Configure seu primeiro alerta e receba avisos no WhatsApp quando o mercado se mexer.
+              Você pode usar um <Link href="/templates" className="font-medium text-brand-ink hover:underline">template pronto</Link> ou criar do zero.
+            </p>
+            <div className="flex justify-center gap-2">
+              <Link href="/templates"><Button variant="outline" size="sm">Ver templates</Button></Link>
+              <Link href="/alerts/new"><Button variant="brand" size="sm">Criar do zero</Button></Link>
+            </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {alerts.map((a: any, idx: number) => (
-              <Link
-                key={a.id}
-                href={`/alerts/${a.id}`}
-                className="group card-hover relative block overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-soft hover:border-brand-300/80 hover:shadow-lifted animate-fade-up"
-                style={{ animationDelay: `${idx * 40}ms` }}
-              >
-                <div className="flex items-center gap-5">
-                  {/* status dot */}
-                  <div className="flex-shrink-0">
-                    {a.active
-                      ? <span className="dot-active" />
-                      : <span className="block h-2 w-2 rounded-full bg-zinc-300" />}
-                  </div>
+          <div className="space-y-1.5">
+            {(alerts ?? []).map((a: any, idx: number) => {
+              const cat = a.asset?.category ?? '';
+              const dot = CATEGORY_DOT[cat] ?? 'var(--ink-3)';
+              const isUsd = a.asset?.unit?.includes('USD') ?? false;
+              return (
+                <Link
+                  key={a.id}
+                  href={`/alerts/${a.id}`}
+                  className="group card-hover block rounded-md border border-line bg-panel px-4 py-3 transition animate-fade-up"
+                  style={{ animationDelay: `${Math.min(idx, 8) * 25}ms` }}
+                >
+                  <div className="flex items-center gap-4">
+                    {/* status pulse */}
+                    <span className="flex-shrink-0">
+                      {a.active
+                        ? <span className="dot-active" />
+                        : <span className="block h-1.5 w-1.5 rounded-full bg-line-strong" />}
+                    </span>
 
-                  {/* main */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={categoryVariant(a.asset?.category ?? 'muted')}>
-                        {categoryLabel(a.asset?.category ?? '')}
-                      </Badge>
-                      <h3 className="truncate font-semibold text-zinc-900">{a.asset?.name}</h3>
-                      <span className="font-mono text-xs text-zinc-400">{a.asset?.symbol}</span>
-                    </div>
-                    <p className="mt-1.5 text-sm text-zinc-600">
-                      {a.alert_type === 'price_target' ? (
-                        <>
-                          Avisa quando o preço{' '}
-                          <strong className="font-semibold text-zinc-900">
-                            {directionLabel(a.target_direction)} {Number(a.target_price).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
-                          </strong>
-                          {' '}
-                          <span className="font-mono text-xs text-zinc-400">{a.asset?.unit}</span>
-                        </>
-                      ) : (
-                        <>
-                          Variação ≥ <strong className="font-semibold text-zinc-900">{a.threshold_pct}%</strong>
-                          {' · '}
-                          <span className="text-zinc-500">{comparisonLabel(a.comparison_type, a.comparison_days)}</span>
-                        </>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* meta */}
-                  <div className="hidden text-right text-xs text-zinc-500 md:block">
-                    <div>
-                      {a.last_notified_at
-                        ? `Último alerta ${relativeTime(a.last_notified_at)}`
-                        : 'Ainda não disparou'}
-                    </div>
-                    {a.reference_price && (
-                      <div className="mt-1 text-zinc-400">
-                        Ref: <span className="font-mono">{formatPrice(a.reference_price, a.asset?.unit?.includes('USD') ? 'USD' : 'BRL')}</span>
+                    {/* main */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[12.5px]">
+                        <span
+                          className="inline-block h-[7px] w-[7px] rounded-full"
+                          style={{ background: dot }}
+                          aria-hidden
+                        />
+                        <code className="num text-[11px] font-medium uppercase tracking-wider text-ink-3">
+                          {a.asset?.symbol}
+                        </code>
+                        <h3 className="truncate font-semibold text-ink">{a.asset?.name}</h3>
                       </div>
-                    )}
-                  </div>
+                      <p className="mt-1 text-[12px] text-ink-2">
+                        {a.alert_type === 'price_target' ? (
+                          <>
+                            <span className="text-ink-3">{directionLabel(a.target_direction)}</span>{' '}
+                            <span className="num font-semibold text-ink">
+                              {Number(a.target_price).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                            </span>{' '}
+                            {a.asset?.unit && <span className="num text-[11px] text-ink-3">{a.asset.unit}</span>}
+                          </>
+                        ) : (
+                          <>
+                            <span>Variação ≥</span>{' '}
+                            <span className="num font-semibold text-ink">{a.threshold_pct}%</span>{' '}
+                            <span className="text-ink-3">· {comparisonLabel(a.comparison_type, a.comparison_days)}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
 
-                  <ArrowRight className="hidden h-4 w-4 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-brand-600 sm:block" />
-                </div>
-              </Link>
-            ))}
+                    {/* meta */}
+                    <div className="hidden text-right md:block">
+                      <div className="num text-[11px] text-ink-3">
+                        {a.last_notified_at
+                          ? <>último ping {relativeTime(a.last_notified_at)}</>
+                          : <>nunca disparou</>}
+                      </div>
+                      {a.reference_price && (
+                        <div className="num mt-0.5 text-[10px] text-ink-3">
+                          ref {formatPrice(a.reference_price, isUsd ? 'USD' : 'BRL')}
+                        </div>
+                      )}
+                    </div>
+
+                    <ArrowRight className="hidden h-3.5 w-3.5 flex-shrink-0 text-ink-3 transition group-hover:translate-x-0.5 group-hover:text-brand-ink sm:block" />
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </main>
