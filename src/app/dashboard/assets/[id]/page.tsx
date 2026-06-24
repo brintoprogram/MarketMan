@@ -34,12 +34,15 @@ export default async function AssetDetail({ params }: { params: { id: string } }
     .single();
   if (!asset) notFound();
 
+  const fiveYearsAgo = new Date();
+  fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+
   const { data: quotes } = await supabase
     .from('quotes')
     .select('id, price, fetched_at, source, raw, volume_brl, trades_count, open_interest, oscillation_pct, ohlc')
     .eq('asset_id', asset.id)
-    .order('fetched_at', { ascending: false })
-    .limit(1000);
+    .gte('fetched_at', fiveYearsAgo.toISOString())
+    .order('fetched_at', { ascending: false });
 
   const { data: spread } = await supabase
     .from('v_latest_calendar_spread')

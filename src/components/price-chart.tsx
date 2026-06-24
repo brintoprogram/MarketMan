@@ -35,7 +35,7 @@ const TIMEFRAMES: { label: Timeframe; seconds: number | null }[] = [
   { label: '3M',  seconds: 90 * 24 * 3600 },
   { label: '6M',  seconds: 180 * 24 * 3600 },
   { label: '1Y',  seconds: 365 * 24 * 3600 },
-  { label: 'ALL', seconds: null }
+  { label: 'ALL', seconds: 5 * 365 * 24 * 3600 }
 ];
 
 const INDICATOR_META: Record<IndicatorKey, { label: string; color: string; tooltip: string }> = {
@@ -369,7 +369,7 @@ export function PriceChart({ data, unit, className, height = 360, compareAssets 
           Histórico insuficiente para esse intervalo.
         </div>
       ) : (
-        <div ref={containerRef} style={{ height }} className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-soft" />
+        <div ref={containerRef} style={{ height }} className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-soft [&_a]:!hidden" />
       )}
 
       {/* RSI panel */}
@@ -379,7 +379,7 @@ export function PriceChart({ data, unit, className, height = 360, compareAssets 
             <span>RSI (14) · acima de 70 = sobrecomprado · abaixo de 30 = sobrevendido</span>
             <span className={`tabular-nums ${rsiClass.cls}`}>atual: {lastRsi?.toFixed(1)} · {rsiClass.label}</span>
           </div>
-          <div ref={rsiContainerRef} style={{ height: 110 }} className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-soft" />
+          <div ref={rsiContainerRef} style={{ height: 110 }} className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-soft [&_a]:!hidden" />
         </div>
       )}
     </div>
